@@ -17,7 +17,7 @@ def get_reverse_complement(seq):
 
 # 3. Header Section (Logo + Title)
 # We create two columns: one narrow for the logo, one wide for the text
-col1, col2 = st.columns([1, 4], vertical_alignment="center")
+col1, col2 = st.columns([4, 4], vertical_alignment="center")
 
 with col1:
     try:
@@ -100,6 +100,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("Developed for ASO Research")
+
 
 
 
