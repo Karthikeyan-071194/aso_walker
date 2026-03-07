@@ -94,6 +94,8 @@ with st.sidebar:
     1. The app extracts a window of your specified size.
     2. It moves **1 base at a time** across your sequence.
     3. It calculates the **Reverse Complement** for each window to create the ASO.
+    4. The sequence name will be used for naming the ASOs (Example: if sequence name is ABC, the names of the ASOs will be ABC_1, ABC2,....
     """)
     st.markdown("---")
+
     st.markdown("Developed for ASO Research")
