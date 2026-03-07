@@ -34,7 +34,7 @@ st.divider()
 
 # 4. Input Section
 # Streamlit widgets are responsive by default (they stack on mobile)
-seq_name = st.text_input("Sequence Name", value="Enter the name of the sequence", help="Base name for your ASOs (e.g., MyGene)")
+seq_name = st.text_input("Sequence Name", placeholder="Enter the name of the sequence", help="Base name for your ASOs (e.g., MyGene)")
 
 raw_seq = st.text_area("Target Sequence (5'-3')", placeholder="Paste your DNA/RNA sequence here...", height=200)
 
@@ -100,6 +100,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("Developed for ASO Research")
+
 
 
 
