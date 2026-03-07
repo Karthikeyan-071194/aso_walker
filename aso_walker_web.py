@@ -19,7 +19,7 @@ st.markdown(
     """
     <div style="text-align: center; padding-bottom: 20px;">
         <img src="https://github.com/Karthikeyan-071194/aso_walker/blob/main/the_walker.png?raw=true" 
-             width="100" 
+             width="200" 
              style="display: block; margin-left: auto; margin-right: auto; margin-bottom: 10px;">
         <h1 style="margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace;">ASO Walker</h1>
         <p style="color: gray; margin-top: 5px; font-family: 'Courier New', Courier, monospace;">Sliding window ASO sequence generator</p>
@@ -98,6 +98,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("Developed for ASO Research")
+
 
 
 
