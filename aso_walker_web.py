@@ -15,6 +15,21 @@ def get_reverse_complement(seq):
     trans = str.maketrans('ATCGUatcgu', 'TAGCAtagca')
     return seq.translate(trans)[::-1]
 
+st.markdown(
+    """
+    <div style="text-align: center; padding-bottom: 20px;">
+        <img src="https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO/main/the_walker.png" 
+             width="100" 
+             style="display: block; margin-left: auto; margin-right: auto; margin-bottom: 10px;">
+        <h1 style="margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace;">ASO Walker</h1>
+        <p style="color: gray; margin-top: 5px; font-family: 'Courier New', Courier, monospace;">Sliding window ASO sequence generator</p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+st.divider()
+
 # 3. Header Section (Logo + Title)
 # We create two columns: one narrow for the logo, one wide for the text
 col1, col2 = st.columns([1, 4], vertical_alignment="center")
@@ -100,6 +115,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("Developed for ASO Research")
+
 
 
 
