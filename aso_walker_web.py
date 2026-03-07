@@ -18,7 +18,7 @@ def get_reverse_complement(seq):
 st.markdown(
     """
     <div style="text-align: center; padding-bottom: 20px;">
-        <img src="https://raw.githubusercontent.com/YOUR_GITHUB_USERNAME/YOUR_REPO/main/the_walker.png" 
+        <img src="https://github.com/Karthikeyan-071194/aso_walker/blob/main/the_walker.png?raw=true" 
              width="100" 
              style="display: block; margin-left: auto; margin-right: auto; margin-bottom: 10px;">
         <h1 style="margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace;">ASO Walker</h1>
@@ -27,23 +27,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
-
-st.divider()
-
-# 3. Header Section (Logo + Title)
-# We create two columns: one narrow for the logo, one wide for the text
-col1, col2 = st.columns([1, 4], vertical_alignment="center")
-
-with col1:
-    try:
-        # Streamlit handles PNGs with transparency natively
-        st.image("the_walker.png", width=150)
-    except:
-        st.write("🧬") # Fallback emoji if image is missing
-
-with col2:
-    st.title("ASO Walker")
-    st.caption("Generate Antisense Oligonucleotide sequences via sliding window.")
 
 st.divider()
 
@@ -115,6 +98,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("Developed for ASO Research")
+
 
 
 
