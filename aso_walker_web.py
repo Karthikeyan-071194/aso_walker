@@ -27,7 +27,7 @@ with col1:
         st.write("🧬") # Fallback emoji if image is missing
 
 with col2:
-    st.title("\t\tASO Walker")
+    st.title("\nASO Walker")
     st.caption("Generate Antisense Oligonucleotide sequences via sliding window.")
 
 st.divider()
@@ -100,6 +100,7 @@ with st.sidebar:
     st.markdown("---")
 
     st.markdown("Developed for ASO Research")
+
 
 
 
