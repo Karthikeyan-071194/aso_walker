@@ -95,11 +95,20 @@ if st.button("Generate & Analyze ASOs", type="primary", use_container_width=True
         st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
 
 with st.sidebar:
+    st.header("How it works")
+    st.info(f"""
+    1. The app extracts a window of **{aso_size} bp**.
+    2. It 'walks' across the sequence **{step_size} bp** at a time.
+    3. It calculates the **Reverse Complement** for each window.
+    4. ASOs are named sequentially: `{seq_name}_1`, `{seq_name}_2`, etc.
+    """)
+    st.divider()
     st.header("QC Guidelines")
     st.write("**Ideal GC:** 40% - 60%")
-    st.write("**Tm Calculation:** Wallace Rule [$2(A+T) + 4(G+C)$]")
+    st.write("**Tm Calculation:** Wallace Rule)
     st.divider()
     st.write("Developed for ASO Research")
+
 
 
 
