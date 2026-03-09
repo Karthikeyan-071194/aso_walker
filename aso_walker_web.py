@@ -105,11 +105,6 @@ with st.sidebar:
     st.divider()
     st.header("QC Guidelines")
     st.write("**Ideal GC:** 40% - 60%")
-    st.write("**Tm Calculation:** Wallace Rule)
+    st.write("**Tm Calculation:** Wallace Rule")
     st.divider()
     st.write("Developed for ASO Research")
-
-
-
-
-
