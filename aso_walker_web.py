@@ -1,116 +1,98 @@
 import streamlit as st
 import pandas as pd
 import io
+import re
 
-# 1. Page Configuration (Sets the browser tab title and favicon)
-st.set_page_config(
-    page_title="ASO Walker",
-    page_icon="🧬",
-    layout="centered"
-)
+# 1. Page Configuration
+st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="centered")
 
-# 2. Reverse Complement Logic
+# 2. Advanced Biological Functions
 def get_reverse_complement(seq):
-    """Returns the reverse complement of a DNA/RNA sequence."""
     trans = str.maketrans('ATCGUatcgu', 'TAGCAtagca')
     return seq.translate(trans)[::-1]
 
+def calculate_metrics(seq):
+    """Calculates GC content and estimated Melting Temperature."""
+    seq = seq.upper()
+    g = seq.count('G')
+    c = seq.count('C')
+    a = seq.count('A')
+    t = seq.count('T')
+    u = seq.count('U')
+    
+    gc_cont = ((g + c) / len(seq)) * 100
+    # Basic Wallace Rule for Tm
+    tm = 2 * (a + t + u) + 4 * (g + c)
+    return round(gc_cont, 1), tm
+
+# 3. Centered Header
 st.markdown(
     """
     <div style="text-align: center; padding-bottom: 20px;">
         <img src="https://github.com/Karthikeyan-071194/aso_walker/blob/main/the_walker.png?raw=true" 
-             width="200" 
-             style="display: block; margin-left: auto; margin-right: auto; margin-bottom: 10px;">
-        <h1 style="margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace;">ASO Walker</h1>
-        <p style="color: gray; margin-top: 5px; font-family: 'Courier New', Courier, monospace;">Sliding window ASO sequence generator</p>
+             width="150" style="display: block; margin: auto; margin-bottom: 10px;">
+        <h1 style="margin: 0; font-family: 'Courier New';">ASO Walker Pro</h1>
+        <p style="color: gray; font-family: 'Courier New';">Advanced Screening & Quality Control</p>
     </div>
-    """,
-    unsafe_allow_html=True
+    """, unsafe_allow_html=True
 )
 
 st.divider()
 
-# 4. Input Section
-# Streamlit widgets are responsive by default (they stack on mobile)
-seq_name = st.text_input("Sequence Name", placeholder="Enter the name of the sequence", help="Base name for your ASOs (e.g., MyGene)")
+# 4. Inputs
+seq_name = st.text_input("Sequence Name", placeholder="e.g., Exon_4_Target")
+raw_seq = st.text_area("Target Sequence (5'-3')", placeholder="Paste sequence here...", height=150)
 
-raw_seq = st.text_area("Target Sequence (5'-3')", placeholder="Paste your DNA/RNA sequence here...", height=200)
+# Cleaning and Validation
+clean_seq = "".join(raw_seq.upper().split())
+invalid_chars = re.findall(r'[^ATCGU]', clean_seq)
 
-aso_size = st.number_input("ASO Size (bp)", min_value=1, max_value=100, value=20, step=1)
+if invalid_chars:
+    st.warning(f"⚠️ Warning: Detected non-nucleotide characters: {set(invalid_chars)}")
 
-# 5. Processing Logic
-if st.button("Generate ASO List", type="primary", use_container_width=True):
-    # Sanitize input: remove whitespace and convert to upper
-    clean_seq = "".join(raw_seq.upper().split())
-    
-    # Validation
+col1, col2 = st.columns(2)
+with col1:
+    aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20)
+with col2:
+    step_size = st.slider("Step Size", 1, 10, 1)
+
+# 5. Execution
+if st.button("Generate & Analyze ASOs", type="primary", use_container_width=True):
     if not clean_seq:
-        st.error("Please enter a target sequence.")
+        st.error("Missing target sequence.")
     elif len(clean_seq) < aso_size:
-        st.warning(f"Sequence length ({len(clean_seq)}bp) is shorter than ASO size ({aso_size}bp).")
+        st.error("ASO size exceeds sequence length.")
     else:
-        # Generate the windows
         results = []
-        num_windows = len(clean_seq) - aso_size + 1
-        
-        for i in range(num_windows):
-            target_window = clean_seq[i : i + aso_size]
-            aso_seq = get_reverse_complement(target_window)
+        for i in range(0, len(clean_seq) - aso_size + 1, step_size):
+            window = clean_seq[i : i + aso_size]
+            aso_seq = get_reverse_complement(window)
+            gc, tm = calculate_metrics(aso_seq)
+            
             results.append({
-                "Name": f"{seq_name}_{i+1}",
+                "Name": f"{seq_name}_{len(results) + 1}",
                 "Sequence 5'-3'": aso_seq,
-                "Length": len(aso_seq)
+                "Length": len(aso_seq),
+                "GC Content (%)": gc,
+                "Est. Tm (°C)": tm
             })
         
-        # Create DataFrame
         df = pd.DataFrame(results)
         
-        # Display Success and Data Preview
-        st.success(f"Generated {num_windows} ASO sequences successfully!")
+        # Display QC Metrics
+        st.success(f"Analysis Complete: {len(df)} ASOs generated.")
         
-        # Show table (Interactive on desktop, scrollable on mobile)
-        st.dataframe(df, use_container_width=True)
+        # Color-coding the GC Content for quick screening
+        st.dataframe(df.style.background_gradient(subset=['GC Content (%)'], cmap='RdYlGn', low=0.4, high=0.6), use_container_width=True)
         
-        # 6. Export to CSV
-        # We use a buffer so the file is generated in memory
+        # Export
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
-        csv_data = csv_buffer.getvalue()
-        
-        st.download_button(
-            label="💾 Download CSV File",
-            data=csv_data,
-            file_name=f"{seq_name}_ASO_Results.csv",
-            mime="text/csv",
-            use_container_width=True
-        )
+        st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
 
-# 7. Sidebar Info
 with st.sidebar:
-    st.header("How it works")
-    st.info("""
-    1. The app extracts a window of your specified size.
-    2. It moves **1 base at a time** across your sequence.
-    3. It calculates the **Reverse Complement** for each window to create the ASO.
-    4. The sequence name will be used for naming the ASOs (Example: if sequence name is ABC, the names of the 
-    ASOs will be ABC_1, ABC_2,....)
-    """)
-    st.markdown("---")
-
-    st.markdown("Developed for ASO Research")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+    st.header("QC Guidelines")
+    st.write("**Ideal GC:** 40% - 60%")
+    st.write("**Tm Warning:** Low Tm may indicate weak binding.")
+    st.divider()
+    st.write("Developed for ASO Research")
