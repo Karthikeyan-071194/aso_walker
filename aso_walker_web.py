@@ -20,7 +20,7 @@ def calculate_metrics(seq):
     t = seq.count('T')
     u = seq.count('U')
     
-    gc_cont = rpund(((g + c) / len(seq)) * 100,1)
+    gc_cont = round(((g + c) / len(seq)) * 100,1)
     # Basic Wallace Rule for Tm
     tm = 2 * (a + t + u) + 4 * (g + c)
     return round(gc_cont, 1), tm
@@ -96,4 +96,5 @@ with st.sidebar:
     st.write("**Tm Warning:** Low Tm may indicate weak binding.")
     st.divider()
     st.write("Developed for ASO Research")
+
 
