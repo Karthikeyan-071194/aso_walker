@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 import io
 import numpy as np
-import matplotlib.pyplot as plt
-import networkx as nx
 
 # 1. Page Configuration
 st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
 
-# --- BIOLOGICAL & DRAWING LOGIC ---
+# --- BIOLOGICAL LOGIC ---
 
 def get_reverse_complement(seq):
     trans = str.maketrans('ATCGUatcgu', 'TAGCAtagca')
@@ -26,19 +24,17 @@ def calculate_metrics(seq):
 def predict_secondary_structure(sequence):
     """
     Predicts Dot-Bracket using a Thermodynamic-Weighted Nussinov Algorithm.
-    Improved to match ViennaRNA behavior (min loop size 3).
+    Matches ViennaRNA behavior with a 3-base minimum loop constraint.
     """
     n = len(sequence)
-    # Energy weights reflecting stability (Higher = Stronger)
     def energy(b1, b2):
         pair = sorted([b1, b2])
-        if pair == ['C', 'G']: return 3.0  # GC is strongest
+        if pair == ['C', 'G']: return 3.0  
         if pair == ['A', 'U'] or pair == ['A', 'T']: return 2.0
-        if pair == ['G', 'U'] or pair == ['G', 'T']: return 1.0  # Wobble pair
+        if pair == ['G', 'U'] or pair == ['G', 'T']: return 1.0  
         return 0
 
     dp = np.zeros((n, n))
-    # Fill DP table (Ensuring minimum loop size of 3)
     for k in range(4, n): 
         for i in range(n - k):
             j = i + k
@@ -52,7 +48,6 @@ def predict_secondary_structure(sequence):
                 res.append(dp[i][t] + dp[t+1][j])
             dp[i][j] = max(res)
             
-    # Backtrack to build dot-bracket string
     structure = ["."] * n
     stack = [(0, n - 1)]
     while stack:
@@ -70,51 +65,13 @@ def predict_secondary_structure(sequence):
                     break
     return "".join(structure)
 
-def draw_force_directed_structure(sequence, dot_bracket):
-    """Generates a Force-Directed 2D plot mimicking professional RNA software."""
-    n = len(sequence)
-    G = nx.Graph()
-    hb_edges = []
-    stack = []
-    
-    # Add backbone and hydrogen bond edges
-    for i in range(n - 1):
-        G.add_edge(i, i + 1, weight=5)
-    
-    for i, char in enumerate(dot_bracket):
-        if char == "(":
-            stack.append(i)
-        elif char == ")":
-            j = stack.pop()
-            G.add_edge(i, j, weight=1)
-            hb_edges.append((i, j))
-            
-    # Physics simulation (Fallback to spring if SciPy is missing)
-    try:
-        pos = nx.kamada_kawai_layout(G)
-    except:
-        pos = nx.spring_layout(G, k=1/np.sqrt(n), iterations=50)
-    
-    fig, ax = plt.subplots(figsize=(10, 10))
-    nx.draw_networkx_edges(G, pos, edgelist=[(i, i+1) for i in range(n-1)], 
-                           edge_color='#D3D3D3', width=1.5, ax=ax)
-    nx.draw_networkx_edges(G, pos, edgelist=hb_edges, 
-                           edge_color='#29b09d', width=2.5, ax=ax)
-    
-    for i, base in enumerate(sequence):
-        color = '#0068c9' if base in 'GC' else '#ff4b4b'
-        ax.scatter(pos[i][0], pos[i][1], color=color, s=200, zorder=5, edgecolors='white')
-        ax.text(pos[i][0], pos[i][1], base, fontsize=8, ha='center', va='center', 
-                color='white', weight='bold', zorder=6)
-    ax.set_axis_off()
-    return fig
-
 # --- UI SECTION ---
 
 st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Linear Structural Mapping & ASO Generation</p>", unsafe_allow_html=True)
 
 # Main Input
-raw_seq = st.text_area("Target Sequence (RNA/DNA)", placeholder="Paste sequence here...", height=120)
+raw_seq = st.text_area("Target Sequence (RNA/DNA)", placeholder="Paste sequence here...", height=150)
 clean_seq = "".join(raw_seq.upper().split())
 
 # Settings Columns
@@ -126,34 +83,43 @@ with col_size:
 with col_step:
     step_size = st.slider("Step Size (Stride)", 1, 10, 1)
 
-if st.button("Generate Full Structural Analysis", type="primary", use_container_width=True):
+if st.button("Generate Structural Analysis", type="primary", use_container_width=True):
     if not clean_seq:
         st.error("Please enter a sequence.")
     else:
-        with st.spinner("Calculating thermodynamic folding..."):
+        with st.spinner("Analyzing thermodynamic folding..."):
             dot_bracket = predict_secondary_structure(clean_seq)
         
-        # 1. Synchronized Viewer
+        # 1. Synchronized Viewer (Expanded to full width since image is gone)
         st.subheader("Interactive Alignment Map")
-        ruler = "".join([str(i%10) if i%10==0 else ("1" if i==1 else " ") for i in range(1, len(clean_seq)+1)])
+        st.info("Scroll horizontally to compare. ( . ) = Loop/Accessible | ( ( ) = Stem/Inaccessible")
+        
+        # Ruler logic for base numbering
+        ruler = ""
+        for i in range(len(clean_seq)):
+            pos = i + 1
+            if pos % 10 == 0:
+                ruler += str(pos)
+            elif pos == 1:
+                ruler += "1"
+            else:
+                last_ten = (pos // 10) * 10
+                if pos > last_ten and pos < last_ten + len(str(last_ten)):
+                    continue
+                ruler += " "
+
         st.markdown(f"""
         <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
-                    background-color: #f0f2f6; padding: 20px; border-radius: 10px; line-height: 1.6;">
+                    background-color: #f0f2f6; padding: 25px; border-radius: 10px; line-height: 1.8; font-size: 15px;">
 <span style="color:#ff4b4b; font-weight:bold;">NUM:</span> {ruler}
 <span style="color:#0068c9; font-weight:bold;">SEQ:</span> {clean_seq}
 <span style="color:#29b09d; font-weight:bold;">STR:</span> {dot_bracket}
         </div>""", unsafe_allow_html=True)
 
-        # 2. Folded Topology and Results Table
-        col_img, col_data = st.columns([1.2, 1])
-        
-        with col_img:
-            st.subheader("Folded Topology")
-            fig = draw_force_directed_structure(clean_seq, dot_bracket)
-            st.pyplot(fig)
-            st.caption("● Blue: Strong Pairing (GC) | ● Red: Weak Pairing (AU) | Teal: Hydrogen Bonds")
+        st.divider()
 
-        # 3. Process Table
+        # 2. Results Table
+        st.subheader("ASO Selection Table")
         results = []
         for i in range(0, len(clean_seq) - aso_size + 1, step_size):
             window_struct = dot_bracket[i : i + aso_size]
@@ -163,27 +129,36 @@ if st.button("Generate Full Structural Analysis", type="primary", use_container_
                 "Name": f"{seq_name}_{len(results) + 1}",
                 "Region": f"{i+1}-{i+aso_size}",
                 "ASO Sequence (5'-3')": aso_seq,
-                "GC%": gc, "Tm (°C)": tm,
+                "GC%": gc, 
+                "Est. Tm (°C)": tm,
                 "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1)
             })
         
         df = pd.DataFrame(results)
         
-        with col_data:
-            st.subheader("ASO Selection Table")
-            st.dataframe(
-                df.style.background_gradient(subset=['Accessibility%'], cmap='Greens')
-                .format({"GC%": "{:.1f}", "Accessibility%": "{:.1f}"}), 
-                use_container_width=True, height=450
-            )
-            
-            csv_buffer = io.StringIO()
-            df.to_csv(csv_buffer, index=False)
-            st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), 
-                               file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+        # Display formatted table
+        st.dataframe(
+            df.style.background_gradient(subset=['Accessibility%'], cmap='Greens')
+            .format({"GC%": "{:.1f}", "Accessibility%": "{:.1f}"}), 
+            use_container_width=True
+        )
+        
+        # Export Button
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        st.download_button("💾 Download Full CSV Analysis", data=csv_buffer.getvalue(), 
+                           file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
 
 with st.sidebar:
-    st.header("How it works")
-    st.info("This app uses a weighted Nussinov algorithm with a 3-base minimum loop constraint to simulate RNA folding.")
+    st.header("Guide")
+    st.markdown("""
+    **Notation:**
+    * `.` = Loop (Accessible)
+    * `(` or `)` = Stem (Bound)
+    
+    **QC Specs:**
+    * **Ideal GC:** 40% - 60%
+    * **Accessibility:** Higher is better for binding.
+    """)
     st.divider()
     st.markdown("**Developed for ASO Research**")
