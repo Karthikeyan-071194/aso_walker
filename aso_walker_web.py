@@ -20,7 +20,7 @@ def calculate_metrics(seq):
     t = seq.count('T')
     u = seq.count('U')
     
-    gc_cont = round(((g + c) / len(seq)) * 100,1)
+    gc_cont = ((g + c) / len(seq)) * 100
     # Basic Wallace Rule for Tm
     tm = 2 * (a + t + u) + 4 * (g + c)
     return round(gc_cont, 1), tm
@@ -79,6 +79,13 @@ if st.button("Generate & Analyze ASOs", type="primary", use_container_width=True
         
         df = pd.DataFrame(results)
         
+        # --- FIX: FORCING 1 DECIMAL PLACE IN DISPLAY ---
+        # We use .format() to tell Streamlit EXACTLY how to show the numbers
+        styled_df = df.style.format({
+            "GC Content (%)": "{:.1f}", 
+            "Est. Tm (°C)": "{:.0f}"
+        })
+        
         # Display QC Metrics
         st.success(f"Analysis Complete: {len(df)} ASOs generated.")
         
@@ -96,5 +103,6 @@ with st.sidebar:
     st.write("**Tm Warning:** Low Tm may indicate weak binding.")
     st.divider()
     st.write("Developed for ASO Research")
+
 
 
