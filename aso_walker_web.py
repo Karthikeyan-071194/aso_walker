@@ -98,7 +98,7 @@ with st.sidebar:
     st.header("How it works")
     st.info(f"""
     1. The app extracts a window of **{aso_size} bp**.
-    2. It 'walks' across the sequence **{step_size} bp** at a time.
+    2. It 'walks' across the sequence at given step size at a time.
     3. It calculates the **Reverse Complement** for each window.
     4. ASOs are named sequentially: `{seq_name}_1`, `{seq_name}_2`, etc.
     """)
@@ -108,3 +108,4 @@ with st.sidebar:
     st.write("**Tm Calculation:** Wallace Rule")
     st.divider()
     st.write("Developed for ASO Research")
+
