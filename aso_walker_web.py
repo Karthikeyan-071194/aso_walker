@@ -5,7 +5,7 @@ import requests  # To communicate with external folding engines
 import numpy as np
 
 # 1. Page Configuration
-st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="ASO Walker", page_icon="🧬", layout="wide")
 
 # --- BIOLOGICAL LOGIC ---
 
@@ -68,7 +68,7 @@ def get_vienna_fold(sequence):
 
 # --- UI SECTION ---
 
-st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align: center; color: gray;'>High-Fidelity Thermodynamic Folding</p>", unsafe_allow_html=True)
 
 raw_seq = st.text_area("Target Sequence", placeholder="Paste sequence here...", height=120)
@@ -76,7 +76,7 @@ clean_seq = "".join(raw_seq.upper().split())
 
 col1, col2, col3 = st.columns(3)
 with col1:
-    seq_name = st.text_input("Project Name", value="Task_1")
+    seq_name = st.text_input("Sequence Name", value="Target_1")
 with col2:
     aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20)
 with col3:
@@ -91,13 +91,16 @@ if st.button("Generate Vienna-Aligned Analysis", type="primary", use_container_w
         
         st.subheader("Thermodynamic Alignment Map")
         ruler = "".join([str(i%10) if i%10==0 else ("1" if i==1 else " ") for i in range(1, len(clean_seq)+1)])
-        st.markdown(f"""
-        <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
-                    background-color: #f0f2f6; padding: 25px; border-radius: 10px; line-height: 1.8;">
-<span style="color:#ff4b4b; font-weight:bold;">NUM:</span> {ruler}
-<span style="color:#0068c9; font-weight:bold;">SEQ:</span> {clean_seq}
-<span style="color:#29b09d; font-weight:bold;">STR:</span> {dot_bracket}
-        </div>""", unsafe_allow_html=True)
+        st.markdown(
+            f"""
+            <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
+                        background-color: #1E1E1E; padding: 25px; border-radius: 10px; line-height: 2.0; border: 1px solid #333;">
+<span style="color: #FF5F5F; font-weight: bold;">NUM:</span> <span style="color: #FFFFFF;">{ruler}</span>
+<span style="color: #569CD6; font-weight: bold;">SEQ:</span> <span style="color: #DCDCAA; font-weight: bold;">{clean_seq}</span>
+<span style="color: #4EC9B0; font-weight: bold;">STR:</span> <span style="color: #CE9178;">{dot_bracket}</span>
+            </div>
+            """, unsafe_allow_html=True
+        )
 
         results = []
         for i in range(0, len(clean_seq) - aso_size + 1, step_size):
@@ -123,3 +126,4 @@ if st.button("Generate Vienna-Aligned Analysis", type="primary", use_container_w
         df.to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), 
                            file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+
