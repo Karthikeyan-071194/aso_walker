@@ -21,43 +21,53 @@ def calculate_metrics(seq):
     tm = 2 * (a + t + u) + 4 * (g + c)
     return round(gc_cont, 1), tm
 
-def simple_fold(sequence):
+def predict_secondary_structure(sequence):
     """
-    A simplified Nussinov algorithm to predict secondary structure.
-    Returns a list where 0 = unpaired (loop/bulge) and 1 = paired (stem).
+    Predicts RNA secondary structure using a simplified energy-based folding model.
+    Returns Dot-Bracket notation: '.' (Loop), '(' or ')' (Stem).
     """
     n = len(sequence)
-    if n > 100: # Limit for web performance
-        return [0] * n 
-    
-    # Minimal pairing rules
-    def can_pair(base1, base2):
-        pair = sorted([base1, base2])
-        return pair == ['C', 'G'] or pair == ['A', 'U'] or pair == ['A', 'T']
+    # Energy table for pairings
+    def energy(b1, b2):
+        pair = sorted([b1, b2])
+        if pair == ['C', 'G']: return -3
+        if pair == ['A', 'U'] or pair == ['A', 'T']: return -2
+        if pair == ['G', 'U'] or pair == ['G', 'T']: return -1
+        return 0
 
-    # Initialize DP table
-    nm = np.zeros((n, n))
+    # Fill DP table (Nussinov-Jacobson variation)
+    dp = np.zeros((n, n))
     for k in range(1, n):
         for i in range(n - k):
             j = i + k
-            if j - i >= 3:
-                down = nm[i + 1][j]
-                left = nm[i][j - 1]
-                diag = nm[i + 1][j - 1] + (1 if can_pair(sequence[i], sequence[j]) else 0)
-                max_k = 0
-                for t in range(i + 1, j):
-                    max_k = max(max_k, nm[i][t] + nm[t + 1][j])
-                nm[i][j] = max(down, left, diag, max_k)
-    
-    # Backtrack to find paired bases (Simplified)
-    structure = [0] * n
-    # (Full backtracking omitted for brevity, marking likely paired regions)
-    for i in range(n):
-        for j in range(i+3, n):
-            if nm[i][j] > nm[i+1][j] and nm[i][j] > nm[i][j-1] and can_pair(sequence[i], sequence[j]):
-                structure[i] = 1
-                structure[j] = 1
-    return structure
+            res = [dp[i+1][j], dp[i][j-1]]
+            if energy(sequence[i], sequence[j]) < 0:
+                res.append(dp[i+1][j-1] + 1)
+            for t in range(i+1, j):
+                res.append(dp[i][t] + dp[t+1][j])
+            dp[i][j] = max(res)
+            
+    # Backtrack to build dot-bracket string
+    structure = ["."] * n
+    stack = [(0, n - 1)]
+    while stack:
+        i, j = stack.pop()
+        if i >= j: continue
+        elif dp[i][j] == dp[i+1][j]:
+            stack.append((i+1, j))
+        elif dp[i][j] == dp[i][j-1]:
+            stack.append((i, j-1))
+        elif dp[i][j] == dp[i+1][j-1] + (1 if energy(sequence[i], sequence[j]) < 0 else 0):
+            structure[i] = "("
+            structure[j] = ")"
+            stack.append((i+1, j-1))
+        else:
+            for k in range(i+1, j):
+                if dp[i][j] == dp[i][k] + dp[k+1][j]:
+                    stack.append((k+1, j))
+                    stack.append((i, k))
+                    break
+    return "".join(structure)
 
 # --- UI SECTION ---
 
@@ -89,46 +99,61 @@ if st.button("Analyze Structure & Generate ASOs", type="primary", use_container_
     if not clean_seq:
         st.error("Please enter a sequence.")
     else:
-        # 1. Predict Structure
-        with st.spinner("Folding RNA structure..."):
-            struct_map = simple_fold(clean_seq)
+        # 1. Fold the RNA
+        with st.spinner("Folding RNA to find loops and bulges..."):
+            dot_bracket = predict_secondary_structure(clean_seq)
             
-        # 2. Visualize Structure
-        st.subheader("RNA Secondary Structure Map")
-        struct_viz = "".join(["●" if s == 1 else "○" for s in struct_map])
-        st.code(clean_seq)
-        st.code(struct_viz)
-        st.caption("● = Paired (Stem) | ○ = Unpaired (Loop/Bulge)")
-
-        # 3. Generate ASOs
+        # 2. Visual Representation of Folding
+        st.subheader("RNA Secondary Structure Prediction")
+        
+        
+        
+        st.info("The structure below shows how the RNA 'folds' on itself. Focus your ASO design on the **Dots (.)** which represent accessible loops.")
+        
+        # Display Dot-Bracket Map
+        st.code(f"SEQ: {clean_seq}")
+        st.code(f"STR: {dot_bracket}")
+        
+        # 3. Generate ASOs with Accessibility Analysis
         results = []
         for i in range(0, len(clean_seq) - aso_size + 1, step_size):
-            window = clean_seq[i : i + aso_size]
-            aso_seq = get_reverse_complement(window)
+            window_seq = clean_seq[i : i + aso_size]
+            window_struct = dot_bracket[i : i + aso_size]
+            
+            aso_seq = get_reverse_complement(window_seq)
             gc, tm = calculate_metrics(aso_seq)
             
-            # Check how many unpaired bases are in this window
-            unpaired_count = struct_map[i : i + aso_size].count(0)
-            accessibility = (unpaired_count / aso_size) * 100
+            # Accessibility: Percentage of target region that is NOT a stem
+            unpaired_bases = window_struct.count(".")
+            accessibility = (unpaired_bases / aso_size) * 100
             
             results.append({
                 "Name": f"{seq_name}_{len(results) + 1}",
+                "Target Region": f"{i+1}-{i+aso_size}",
                 "Sequence 5'-3'": aso_seq,
-                "GC%": gc,
-                "Tm (°C)": tm,
-                "Accessibility%": round(accessibility, 1)
+                "GC Content (%)": gc,
+                "Est. Tm (°C)": tm,
+                "Accessibility (%)": round(accessibility, 1)
             })
         
         df = pd.DataFrame(results)
         st.success("Analysis Complete!")
 
-        # High Accessibility = Better targeting
+        # High Accessibility = Darker Blue (Target these!)
         st.dataframe(
-            df.style.background_gradient(subset=['Accessibility%'], cmap='Blues')
-            .format({"GC%": "{:.1f}", "Accessibility%": "{:.1f}"}),
+            df.style.background_gradient(subset=['Accessibility (%)'], cmap='Blues')
+            .format({"GC Content (%)": "{:.1f}", "Accessibility (%)": "{:.1f}"}),
             use_container_width=True
         )
 
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
-        st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Full_Analysis.csv", use_container_width=True)
+        st.download_button("💾 Download Full Structural Analysis", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+
+with st.sidebar:
+    st.header("Structure Guide")
+    st.write("**( . ) Dot:** Unpaired loop/bulge (High Binding)")
+    st.write("**( ( ) Bracket:** Paired stem (Low Binding)")
+    st.divider()
+    st.write("Developed for ASO Research")
+
