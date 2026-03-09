@@ -3,7 +3,6 @@ import pandas as pd
 import io
 import numpy as np
 import matplotlib.pyplot as plt
-import networkx as nx
 
 # 1. Page Configuration
 st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
@@ -60,47 +59,34 @@ def predict_secondary_structure(sequence):
                     break
     return "".join(structure)
 
-def draw_force_directed_structure(sequence, dot_bracket):
-    """Generates a Force-Directed 2D plot similar to professional RNA software."""
+def draw_structure(sequence, dot_bracket):
+    """Generates a 2D plot of the folded RNA."""
     n = len(sequence)
-    G = nx.Graph()
+    # Simple circular layout for visualization
+    angles = np.linspace(0, 2*np.pi, n, endpoint=False)
+    x = np.cos(angles)
+    y = np.sin(angles)
     
-    # 1. Add backbone edges (Stronger spring)
-    for i in range(n - 1):
-        G.add_edge(i, i + 1, weight=2)
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.plot(x, y, color='lightgrey', lw=1, zorder=1) # Backbone
     
-    # 2. Add hydrogen bond edges (Lighter spring to allow loops to expand)
-    hb_edges = []
+    # Draw base pairs
     stack = []
     for i, char in enumerate(dot_bracket):
         if char == "(":
             stack.append(i)
         elif char == ")":
             j = stack.pop()
-            G.add_edge(i, j, weight=1)
-            hb_edges.append((i, j))
+            ax.plot([x[i], x[j]], [y[i], y[j]], color='#29b09d', lw=2, alpha=0.6, zorder=2)
             
-    # 3. Calculate Physics Layout (Kamada-Kawai provides a clean organic look)
-    pos = nx.kamada_kawai_layout(G)
-    
-    fig, ax = plt.subplots(figsize=(8, 8))
-    
-    # Draw Backbone
-    nx.draw_networkx_edges(G, pos, edgelist=[(i, i+1) for i in range(n-1)], 
-                           edge_color='lightgrey', width=1.5, ax=ax)
-    
-    # Draw Hydrogen Bonds (Stems)
-    nx.draw_networkx_edges(G, pos, edgelist=hb_edges, 
-                           edge_color='#29b09d', width=2, style='solid', ax=ax)
-    
-    # Draw Nucleotides
+    # Draw nucleotides
     for i, base in enumerate(sequence):
         color = '#0068c9' if base in 'GC' else '#ff4b4b'
-        ax.scatter(pos[i][0], pos[i][1], color=color, s=120, zorder=5)
-        ax.text(pos[i][0], pos[i][1], base, fontsize=7, ha='center', va='center', 
-                color='white', weight='bold', zorder=6)
+        ax.scatter(x[i], y[i], color=color, s=100, zorder=3)
+        ax.text(x[i], y[i], base, fontsize=8, ha='center', va='center', color='white', weight='bold', zorder=4)
 
     ax.set_axis_off()
+    ax.set_title("Predicted 2D Folding Map", fontsize=10, family='monospace')
     return fig
 
 # --- UI SECTION ---
@@ -122,10 +108,12 @@ if st.button("Generate Folded Image & ASOs", type="primary", use_container_width
     if not clean_seq:
         st.error("Please enter a sequence.")
     else:
-        with st.spinner("Simulating RNA physics..."):
+        # 1. Prediction
+        with st.spinner("Calculating folding energy..."):
             dot_bracket = predict_secondary_structure(clean_seq)
         
-        col_map, col_img = st.columns([2, 1.5])
+        # 2. Visual Layout
+        col_map, col_img = st.columns([2, 1])
         
         with col_map:
             st.subheader("Alignment Map")
@@ -139,11 +127,11 @@ if st.button("Generate Folded Image & ASOs", type="primary", use_container_width
             </div>""", unsafe_allow_html=True)
 
         with col_img:
-            st.subheader("Physical 2D Fold")
-            fig = draw_force_directed_structure(clean_seq, dot_bracket)
+            st.subheader("2D Structure")
+            fig = draw_structure(clean_seq, dot_bracket)
             st.pyplot(fig)
 
-        # 3. Data Table
+        # 3. Table
         results = []
         for i in range(0, len(clean_seq) - aso_size + 1, step_size):
             window_struct = dot_bracket[i : i + aso_size]
@@ -157,14 +145,13 @@ if st.button("Generate Folded Image & ASOs", type="primary", use_container_width
             })
         
         df = pd.DataFrame(results)
-        st.dataframe(df.style.background_gradient(subset=['Accessibility%'], cmap='Greens')
-                     .format({"GC%": "{:.1f}", "Accessibility%": "{:.1f}"}), use_container_width=True)
+        st.dataframe(df.style.background_gradient(subset=['Accessibility%'], cmap='Greens'), use_container_width=True)
         
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
-        st.download_button("💾 Download Full Analysis", data=csv_buffer.getvalue(), 
-                           file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+        st.download_button("💾 Download Full Analysis", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
 
 with st.sidebar:
-    st.info("The 2D map uses physical simulation to show accessible loops and internal bulges.")
+    st.info("● Blue: G/C (Strong) | ● Red: A/U (Weak) | Green Lines: Hydrogen Bonds")
     st.write("Developed for ASO Research")
+
