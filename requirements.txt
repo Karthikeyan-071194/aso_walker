@@ -1,6 +1,5 @@
 streamlit
 pandas
-Pillow
-matplotlib
 numpy
-pandas
+matplotlib
+networkx
