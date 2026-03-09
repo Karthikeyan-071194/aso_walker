@@ -20,7 +20,8 @@ def calculate_metrics(seq):
     t = seq.count('T')
     u = seq.count('U')
     
-    gc_cont = ((g + c) / len(seq)) * 100
+    length = len(seq)
+    gc_cont = ((g + c) / length) * 100 if length > 0 else 0
     # Basic Wallace Rule for Tm
     tm = 2 * (a + t + u) + 4 * (g + c)
     return round(gc_cont, 1), tm
@@ -45,8 +46,10 @@ raw_seq = st.text_area("Target Sequence (5'-3')", placeholder="Paste sequence he
 
 # Cleaning and Validation
 clean_seq = "".join(raw_seq.upper().split())
-invalid_chars = re.findall(r'[^ATCGU]', clean_seq)
+if clean_seq:
+    st.caption(f"Current Target Length: **{len(clean_seq)} bp**")
 
+invalid_chars = re.findall(r'[^ATCGU]', clean_seq)
 if invalid_chars:
     st.warning(f"⚠️ Warning: Detected non-nucleotide characters: {set(invalid_chars)}")
 
@@ -54,14 +57,14 @@ col1, col2 = st.columns(2)
 with col1:
     aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20)
 with col2:
-    step_size = st.slider("Step Size", 1, 10, 1)
+    step_size = st.slider("Step Size (Stride)", 1, 10, 1)
 
 # 5. Execution
 if st.button("Generate & Analyze ASOs", type="primary", use_container_width=True):
     if not clean_seq:
         st.error("Missing target sequence.")
     elif len(clean_seq) < aso_size:
-        st.error("ASO size exceeds sequence length.")
+        st.error(f"ASO size ({aso_size}) exceeds sequence length ({len(clean_seq)}).")
     else:
         results = []
         for i in range(0, len(clean_seq) - aso_size + 1, step_size):
@@ -78,19 +81,13 @@ if st.button("Generate & Analyze ASOs", type="primary", use_container_width=True
             })
         
         df = pd.DataFrame(results)
-        
-        # --- FIX: FORCING 1 DECIMAL PLACE IN DISPLAY ---
-        # We use .format() to tell Streamlit EXACTLY how to show the numbers
-        styled_df = df.style.format({
-            "GC Content (%)": "{:.1f}", 
-            "Est. Tm (°C)": "{:.0f}"
-        })
-        
-        # Display QC Metrics
         st.success(f"Analysis Complete: {len(df)} ASOs generated.")
         
-        # Color-coding the GC Content for quick screening
-        st.dataframe(df.style.background_gradient(subset=['GC Content (%)'], cmap='RdYlGn', low=0.4, high=0.6), use_container_width=True)
+        # Safe display logic: only use gradient if matplotlib is available
+        try:
+            st.dataframe(df.style.background_gradient(subset=['GC Content (%)'], cmap='RdYlGn', vmin=30, vmax=70), use_container_width=True)
+        except ImportError:
+            st.dataframe(df, use_container_width=True)
         
         # Export
         csv_buffer = io.StringIO()
@@ -100,9 +97,10 @@ if st.button("Generate & Analyze ASOs", type="primary", use_container_width=True
 with st.sidebar:
     st.header("QC Guidelines")
     st.write("**Ideal GC:** 40% - 60%")
-    st.write("**Tm Warning:** Low Tm may indicate weak binding.")
+    st.write("**Tm Calculation:** Wallace Rule [$2(A+T) + 4(G+C)$]")
     st.divider()
     st.write("Developed for ASO Research")
+
 
 
 
