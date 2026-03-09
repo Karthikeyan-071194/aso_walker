@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import io
-import requests  # To communicate with external folding engines
+import requests  
 import numpy as np
 
 # 1. Page Configuration
@@ -22,17 +22,8 @@ def calculate_metrics(seq):
     return round(gc_cont, 1), tm
 
 def get_vienna_fold(sequence):
-    """
-    Simulates communication with a ViennaRNA-style engine. 
-    On a local machine, this would call 'RNAfold'. 
-    On the web, we use an API or a pre-compiled library.
-    """
-    # For this implementation, we use a high-fidelity internal logic 
-    # that mimics the Turner 2004 energy parameters used by ViennaRNA.
     n = len(sequence)
-    # Energy parameters (kcal/mol) - approximation of Vienna model
     energies = {'CG': 3.4, 'AU': 0.9, 'GU': 0.1}
-    
     dp = np.zeros((n, n))
     for k in range(4, n):
         for i in range(n - k):
@@ -69,7 +60,6 @@ def get_vienna_fold(sequence):
 # --- UI SECTION ---
 
 st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>High-Fidelity Thermodynamic Folding</p>", unsafe_allow_html=True)
 
 raw_seq = st.text_area("Target Sequence", placeholder="Paste sequence here...", height=120)
 clean_seq = "".join(raw_seq.upper().split())
@@ -82,15 +72,25 @@ with col2:
 with col3:
     step_size = st.slider("Step Size", 1, 10, 1)
 
-if st.button("Generate Vienna-Aligned Analysis", type="primary", use_container_width=True):
+if st.button("Generate Analysis", type="primary", use_container_width=True):
     if not clean_seq:
         st.error("Please enter a sequence.")
     else:
-        with st.spinner("Communicating with folding engine..."):
+        with st.spinner("Folding..."):
             dot_bracket = get_vienna_fold(clean_seq)
         
+        # --- FIXED RULER LOGIC ---
+        ruler_list = [" "] * len(clean_seq)
+        for i in range(len(clean_seq)):
+            pos = i + 1
+            if pos == 1 or pos % 10 == 0:
+                pos_str = str(pos)
+                for j, digit in enumerate(pos_str):
+                    if i + j < len(clean_seq):
+                        ruler_list[i + j] = digit
+        ruler = "".join(ruler_list)
+
         st.subheader("Thermodynamic Alignment Map")
-        ruler = "".join([str(i%10) if i%10==0 else ("1" if i==1 else " ") for i in range(1, len(clean_seq)+1)])
         st.markdown(
             f"""
             <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
@@ -126,4 +126,3 @@ if st.button("Generate Vienna-Aligned Analysis", type="primary", use_container_w
         df.to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), 
                            file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
-
