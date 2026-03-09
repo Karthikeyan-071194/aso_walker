@@ -4,7 +4,7 @@ import io
 import re
 
 # 1. Page Configuration
-st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="centered")
+st.set_page_config(page_title="ASO Walker", page_icon="🧬", layout="centered")
 
 # 2. Advanced Biological Functions
 def get_reverse_complement(seq):
@@ -32,7 +32,7 @@ st.markdown(
     <div style="text-align: center; padding-bottom: 20px;">
         <img src="https://github.com/Karthikeyan-071194/aso_walker/blob/main/the_walker.png?raw=true" 
              width="150" style="display: block; margin: auto; margin-bottom: 10px;">
-        <h1 style="margin: 0; font-family: 'Courier New';">ASO Walker Pro</h1>
+        <h1 style="margin: 0; font-family: 'Courier New';">ASO Walker</h1>
         <p style="color: gray; font-family: 'Courier New';">Advanced Screening & Quality Control</p>
     </div>
     """, unsafe_allow_html=True
@@ -108,6 +108,7 @@ with st.sidebar:
     st.write("**Tm Calculation:** Wallace Rule")
     st.divider()
     st.write("Developed for ASO Research")
+
 
 
 
