@@ -28,7 +28,7 @@ def get_vienna_fold_api(sequence):
     """
     # Using a reliable public API that provides ViennaRNA results
     # Replace with your internal API URL if you set one up later
-    api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}"
+    api_url = f"http://rna.tbi.univie.ac.at/cgi-bin/RNAWebSuite/RNAfold.cgi{sequence}"
     
     try:
         response = requests.get(api_url, timeout=10)
@@ -153,3 +153,4 @@ if st.button("Generate Official Vienna Analysis", type="primary", use_container_
 with st.sidebar:
     st.info("Structure provided by ViennaRNA™ API. Accessibility calculations based on MFE probability.")
     st.write("Developed for ASO Research")
+
