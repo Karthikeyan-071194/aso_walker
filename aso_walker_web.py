@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import io
 import requests
-import time
+import numpy as np
 
 # 1. Page Configuration
 st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
@@ -22,26 +22,14 @@ def calculate_metrics(seq):
     return round(gc_cont, 1), tm
 
 def get_vienna_fold_api(sequence):
-    """
-    Connects to a bioinformatics API to retrieve the exact MFE structure
-    from the ViennaRNA RNAfold engine.
-    """
-    # Using a reliable public API that provides ViennaRNA results
-    # Adding specific parameters to the API call to force a match with the Web Server
-def get_exact_vienna_fold(sequence):
-    # We add parameters for Temperature (37) and Dangle model (2)
-    api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}&temp=37&dangles=2"
-    
+    api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}"
     try:
-        response = requests.get(api_url, timeout=15)
+        response = requests.get(api_url, timeout=10)
         if response.status_code == 200:
             return response.json().get('structure')
-            
-    except Exception as e:
-        st.warning(f"Connection to ViennaRNA API failed. Falling back to internal logic.")
+    except:
         return None
 
-# Internal fallback logic (Nussinov with thermodynamic weights)
 def get_internal_fold(sequence):
     n = len(sequence)
     energies = {'CG': 3.4, 'AU': 0.9, 'GU': 0.1}
@@ -51,10 +39,8 @@ def get_internal_fold(sequence):
             j = i + k
             res = [dp[i+1][j], dp[i][j-1]]
             pair = "".join(sorted([sequence[i], sequence[j]]))
-            if pair in energies:
-                res.append(dp[i+1][j-1] + energies[pair])
-            for t in range(i + 1, j):
-                res.append(dp[i][t] + dp[t+1][j])
+            if pair in energies: res.append(dp[i+1][j-1] + energies[pair])
+            for t in range(i + 1, j): res.append(dp[i][t] + dp[t+1][j])
             dp[i][j] = max(res)
     structure = ["."] * n
     stack = [(0, n - 1)]
@@ -75,84 +61,123 @@ def get_internal_fold(sequence):
                         break
     return "".join(structure)
 
+def find_best_match(target, database_seq):
+    """Finds best match in a sequence and returns the number of mismatches."""
+    t_len = len(target)
+    d_len = len(database_seq)
+    min_mismatches = t_len
+    
+    for i in range(d_len - t_len + 1):
+        window = database_seq[i : i + t_len]
+        mismatches = sum(1 for a, b in zip(target, window) if a != b)
+        if mismatches < min_mismatches:
+            min_mismatches = mismatches
+        if min_mismatches == 0: break
+    return min_mismatches
+
 # --- UI SECTION ---
 
 st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Official ViennaRNA™ Engine Integration</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: gray;'>Multi-Sequence Analysis with Mismatch Tolerance</p>", unsafe_allow_html=True)
 
-raw_seq = st.text_area("Target Sequence", placeholder="Paste sequence here...", height=120)
-clean_seq = "".join(raw_seq.upper().split())
+# 1. Primary Target Input
+st.subheader("1. Primary Target Sequence")
+c_m1, c_m2 = st.columns([1, 3])
+with c_m1:
+    main_name = st.text_input("Main Sequence Title", value="WildType_Target")
+with c_m2:
+    main_raw = st.text_area("Primary Sequence (Walk is performed here)", placeholder="ATCG...", height=100)
+main_clean = "".join(main_raw.upper().split())
 
-col1, col2, col3 = st.columns(3)
-with col1:
-    seq_name = st.text_input("Project Name", value="Task_1")
-with col2:
-    aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20)
-with col3:
-    step_size = st.slider("Step Size", 1, 10, 1)
+# 2. Conservation Database
+st.subheader("2. Variant Database")
+if 'extra_seqs' not in st.session_state:
+    st.session_state.extra_seqs = [{"title": "Variant_1", "seq": ""}]
 
-if st.button("Generate Official Vienna Analysis", type="primary", use_container_width=True):
-    if not clean_seq:
-        st.error("Please enter a sequence.")
+def add_box(): st.session_state.extra_seqs.append({"title": f"Variant_{len(st.session_state.extra_seqs)+1}", "seq": ""})
+def remove_box(): 
+    if len(st.session_state.extra_seqs) > 1: st.session_state.extra_seqs.pop()
+
+for i, box in enumerate(st.session_state.extra_seqs):
+    c1, c2 = st.columns([1, 3])
+    with c1: st.session_state.extra_seqs[i]["title"] = st.text_input(f"Title {i+1}", value=box["title"], key=f"t_{i}")
+    with c2: st.session_state.extra_seqs[i]["seq"] = st.text_area(f"Seq {i+1}", value=box["seq"], key=f"s_{i}", height=68)
+
+st.button("➕ Add Variant", on_click=add_box)
+if len(st.session_state.extra_seqs) > 1: st.button("➖ Remove Variant", on_click=remove_box)
+
+# 3. Settings
+st.divider()
+c_s1, c_s2, c_s3, c_s4 = st.columns(4)
+with c_s1: aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20)
+with c_s2: step_size = st.slider("Step Size", 1, 10, 1)
+with c_s3: mm_limit = st.slider("Mismatch Tolerance", 0, 3, 0)
+with c_s4: st.caption("0 = Perfect match required. 1-3 = Allows near-matches in variants.")
+
+# 4. Execution
+if st.button("Run Advanced Conservation Analysis", type="primary", use_container_width=True):
+    if not main_clean:
+        st.error("Missing Primary Target Sequence.")
     else:
-        with st.spinner("Connecting to ViennaRNA Server..."):
-            # Attempt API first for 100% accuracy
-            dot_bracket = get_vienna_fold_api(clean_seq)
+        with st.spinner("Analyzing structures and variant matches..."):
+            dot_bracket = get_vienna_fold_api(main_clean) or get_internal_fold(main_clean)
+            db = [{"title": i["title"], "seq": "".join(i["seq"].upper().split())} for i in st.session_state.extra_seqs if i["seq"]]
+
+            results = []
+            for i in range(0, len(main_clean) - aso_size + 1, step_size):
+                target_site = main_clean[i : i + aso_size]
+                aso_seq = get_reverse_complement(target_site)
+                window_struct = dot_bracket[i : i + aso_size]
+                gc, tm = calculate_metrics(aso_seq)
+                
+                # Check variants
+                hits, fails = [], []
+                for entry in db:
+                    mismatches = find_best_match(target_site, entry["seq"])
+                    if mismatches <= mm_limit:
+                        hits.append(f"{entry['title']}({mismatches}mm)")
+                    else:
+                        fails.append(entry["title"])
+                
+                status = "CONSERVED" if not fails else f"VARIABLE ({len(hits)}/{len(db)})"
+                
+                results.append({
+                    "ASO_ID": f"{main_name}_{len(results) + 1}",
+                    "Region": f"{i+1}-{i+aso_size}",
+                    "ASO_Sequence": aso_seq,
+                    "GC%": gc, "Tm_C": tm,
+                    "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1),
+                    "Status": status,
+                    "Matched_In": ", ".join(hits),
+                    "Missing_In": ", ".join(fails) if fails else "None"
+                })
+
+            df = pd.DataFrame(results)
+
+            # High-Contrast Alignment Map
+            st.subheader("Target Structure Alignment")
+            r_list = [" "] * len(main_clean)
+            for j in range(len(main_clean)):
+                if (j+1) == 1 or (j+1) % 10 == 0:
+                    for k, d in enumerate(str(j+1)):
+                        if j+k < len(main_clean): r_list[j+k] = d
             
-            # If API is down or unavailable, use internal high-fidelity fallback
-            if dot_bracket is None:
-                import numpy as np
-                dot_bracket = get_internal_fold(clean_seq)
-        
-        st.subheader("Official Alignment Map")
-        
-        ruler_list = [" "] * len(clean_seq)
-        for i in range(len(clean_seq)):
-            pos = i + 1
-            if pos == 1 or pos % 10 == 0:
-                pos_str = str(pos)
-                for j, d in enumerate(pos_str):
-                    if i + j < len(clean_seq): ruler_list[i + j] = d
-        ruler = "".join(ruler_list)
-        
-        st.markdown(
-            f"""
-            <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
-                        background-color: #1E1E1E; padding: 25px; border-radius: 10px; line-height: 2.0; border: 1px solid #333;">
-<span style="color: #FF5F5F; font-weight: bold;">NUM:</span> <span style="color: #FFFFFF;">{ruler}</span>
-<span style="color: #569CD6; font-weight: bold;">SEQ:</span> <span style="color: #DCDCAA; font-weight: bold;">{clean_seq}</span>
-<span style="color: #4EC9B0; font-weight: bold;">STR:</span> <span style="color: #CE9178;">{dot_bracket}</span>
-            </div>
-            """, unsafe_allow_html=True
-        )
+            st.markdown(f"""
+                <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
+                            background-color: #1E1E1E; padding: 25px; border-radius: 10px; line-height: 2.0; color: white;">
+<span style="color: #FF5F5F;">NUM:</span> {"".join(r_list)}
+<span style="color: #569CD6;">SEQ:</span> {main_clean}
+<span style="color: #4EC9B0;">STR:</span> {dot_bracket}
+                </div>""", unsafe_allow_html=True)
 
-        results = []
-        for i in range(0, len(clean_seq) - aso_size + 1, step_size):
-            window_struct = dot_bracket[i : i + aso_size]
-            aso_seq = get_reverse_complement(clean_seq[i : i + aso_size])
-            gc, tm = calculate_metrics(aso_seq)
-            results.append({
-                "Name": f"{seq_name}_{len(results) + 1}",
-                "Region": f"{i+1}-{i+aso_size}",
-                "ASO Sequence": aso_seq,
-                "GC%": gc, "Tm (°C)": tm,
-                "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1)
-            })
-        
-        df = pd.DataFrame(results)
-        st.dataframe(
-            df.style.background_gradient(subset=['Accessibility%'], cmap='Greens')
-            .format({"GC%": "{:.1f}", "Accessibility%": "{:.1f}"}), 
-            use_container_width=True
-        )
+            st.subheader("Analysis Results")
+            st.dataframe(df.style.background_gradient(subset=['Accessibility%'], cmap='Greens'), use_container_width=True)
 
-        csv_buffer = io.StringIO()
-        df.to_csv(csv_buffer, index=False)
-        st.download_button("💾 Download Analysis CSV", data=csv_buffer.getvalue(), 
-                           file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+            csv_buf = io.StringIO()
+            df.to_csv(csv_buf, index=False)
+            st.download_button("💾 Download Results", data=csv_buf.getvalue(), file_name=f"{main_name}_Analysis.csv", use_container_width=True)
 
 with st.sidebar:
-    st.info("Structure provided by ViennaRNA™ API. Accessibility calculations based on MFE probability.")
-    st.write("Developed for ASO Research")
-
-
+    st.info(f"**Tolerance:** Allows up to {mm_limit} mismatches in variants.")
+    st.divider()
+    st.markdown("**ASO Walker Pro**")
