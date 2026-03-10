@@ -143,7 +143,7 @@ if st.button("Run Advanced Conservation Analysis", type="primary", use_container
                 
                 results.append({
                     "ASO_ID": f"{main_name}_{len(results) + 1}",
-                    "Region": f"{i+1}:{i+aso_size}",
+                    "Region": f"Bases {i+1} to {i+aso_size}",
                     "ASO_Sequence": aso_seq,
                     "GC%": gc, "Tm_C": tm,
                     "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1),
@@ -181,5 +181,6 @@ with st.sidebar:
     st.info(f"**Tolerance:** Allows up to {mm_limit} mismatches in variants.")
     st.divider()
     st.markdown("**ASO Walker Pro**")
+
 
 
