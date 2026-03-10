@@ -27,15 +27,16 @@ def get_vienna_fold_api(sequence):
     from the ViennaRNA RNAfold engine.
     """
     # Using a reliable public API that provides ViennaRNA results
-    # Replace with your internal API URL if you set one up later
-    api_url = f"http://rna.tbi.univie.ac.at/cgi-bin/RNAWebSuite/RNAfold.cgi{sequence}"
+    # Adding specific parameters to the API call to force a match with the Web Server
+def get_exact_vienna_fold(sequence):
+    # We add parameters for Temperature (37) and Dangle model (2)
+    api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}&temp=37&dangles=2"
     
     try:
-        response = requests.get(api_url, timeout=10)
+        response = requests.get(api_url, timeout=15)
         if response.status_code == 200:
-            data = response.json()
-            # Returns the official Dot-Bracket string
-            return data.get('structure', "." * len(sequence))
+            return response.json().get('structure')
+            
     except Exception as e:
         st.warning(f"Connection to ViennaRNA API failed. Falling back to internal logic.")
         return None
@@ -153,4 +154,5 @@ if st.button("Generate Official Vienna Analysis", type="primary", use_container_
 with st.sidebar:
     st.info("Structure provided by ViennaRNA™ API. Accessibility calculations based on MFE probability.")
     st.write("Developed for ASO Research")
+
 
