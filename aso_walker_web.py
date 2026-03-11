@@ -54,7 +54,7 @@ def get_internal_fold(sequence):
     """Corrected Thermodynamic DP for Secondary Structure."""
     n = len(sequence)
     energies, dp = {'CG': 3.4, 'AU': 0.9, 'GU': 0.1}, np.zeros((n, n))
-    for k in range(4, n): # Min loop size 3
+    for k in range(4, n):
         for i in range(n - k):
             j = i + k
             res = [dp[i+1][j], dp[i][j-1]]
@@ -74,7 +74,7 @@ def get_internal_fold(sequence):
                 structure[i], structure[j] = "(", ")"
                 stack.append((i+1, j-1))
             else:
-                for t in range(i+1, j): # Fixed branching index
+                for t in range(i+1, j):
                     if dp[i][j] == dp[i][t] + dp[t+1][j]:
                         stack.append((t+1, j)); stack.append((i, t))
                         break
@@ -122,7 +122,7 @@ if len(st.session_state.extra_seqs) > 1: st.button("➖ Remove Variant", on_clic
 if st.button("Generate Complete Analysis", type="primary", use_container_width=True):
     if not clean_seq: st.error("Please enter a target sequence.")
     else:
-        with st.spinner("Analyzing structures..."):
+        with st.spinner("Analyzing variants and folding..."):
             dot_bracket = get_vienna_fold_api(clean_seq) or get_internal_fold(clean_seq)
             db = [{"title": i["title"], "seq": "".join(i["seq"].upper().split())} for i in st.session_state.extra_seqs if i["seq"]]
 
@@ -145,14 +145,15 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
             window_struct = dot_bracket[i : i + aso_size]
             gc, tm = calculate_metrics(aso_seq)
             
-            # Conservation Logic
             hits, fails = [], []
             for entry in db:
                 mm = find_best_match(target_site, entry["seq"])
                 if mm <= mm_limit: hits.append(f"{entry['title']}({mm}mm)")
                 else: fails.append(entry["title"])
             
-            # Motif Analysis
+            mod_score = calculate_mod_score(aso_seq, current_matrix)
+
+            # Motif Logic
             found_motifs = []
             font_color = "#DCDCAA"
             for m, val in LOW_EFFICACY_MOTIFS.items():
@@ -166,18 +167,23 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
                 "ASO_Sequence": aso_seq,
                 "GC%": gc, "Tm_C": tm,
                 "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 2),
-                "Mod_Score": calculate_mod_score(aso_seq, current_matrix),
+                "Mod_Score": mod_score,
                 "Motifs": ", ".join(found_motifs) if found_motifs else "None",
                 "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
                 "Matched_In": ", ".join(hits),
-                "Missing_In": ", ".join(fails) if fails else "None"
+                "Missing_In": ", ".join(fails) if fails else "None",
+                "Color": font_color
             })
         
         df = pd.DataFrame(results)
-        def color_aso(row): return [f'color: {row["Color"]}' if col == 'ASO_Sequence' else '' for col in df.columns]
 
+        # Style function: uses the hidden 'Color' column for font styling
+        def apply_styles(row):
+            return [f'color: {row["Color"]}' if col == 'ASO_Sequence' else '' for col in df.columns]
+
+        # Display dataframe without the 'Color' column
         st.dataframe(
-            df.style.apply(color_aso, axis=1)
+            df.drop(columns=['Color']).style.apply(apply_styles, axis=1)
             .background_gradient(subset=['Mod_Score'], cmap='RdYlBu')
             .format({"GC%": "{:.2f}", "Accessibility%": "{:.2f}", "Mod_Score": "{:.2f}"}), 
             use_container_width=True
@@ -186,4 +192,3 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
         csv_buffer = io.StringIO()
         df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
-
