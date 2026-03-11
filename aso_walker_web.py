@@ -9,14 +9,14 @@ st.set_page_config(page_title="ASO Walker", page_icon="🧬", layout="wide")
 
 # --- SCORING MATRICES DATA ---
 # Values extracted from user-provided images image_eef1da.png
-MOE_MATRIX = { # 5-10-5 MOE, all PS
+MOE_MATRIX = { 
     'A': {1: -3.2, 2: -3.9, 3: -3.6, 4: -2.3, 5: -1.4, 6: -1.4, 7: -3.1, 8: -2.9, 9: -2.2, 10: -2.0, 13: -2.3, 14: -3.0, 15: -2.1, 16: -2.6, 17: -3.8, 18: -4.2, 19: -4.5, 20: -4.1},
     'C': {1: 1.9, 2: 3.1, 3: 4.0, 4: 2.5, 5: 1.9, 13: 2.1, 14: 1.7, 15: 4.2, 16: 4.6, 17: 3.0, 18: 3.8, 19: 4.7},
     'G': {1: 3.1, 2: 1.5, 13: 1.5, 15: -1.9, 17: 1.4, 18: 1.8, 20: -1.6},
     'T': {1: -1.9, 7: 2.4, 8: 2.4, 9: 2.8, 10: 1.9, 11: 1.5}
 }
 
-CET_MATRIX = { # 3-10-3 cEt, all PS
+CET_MATRIX = { 
     'A': {2: -1.1, 3: 1.1, 4: 2.3, 5: -4.9, 9: 1.1, 13: -2.4, 14: -3.2, 15: -3.1},
     'C': {1: -3.0, 2: -2.6, 3: -4.1, 4: -7.1, 5: -4.0, 6: -4.7, 7: -3.6, 8: -4.5, 9: -4.7, 10: -2.4, 11: -2.4, 12: -1.5, 13: 1.2, 14: 1.1},
     'G': {7: -2.9, 8: -2.0, 11: 1.3, 12: 1.1, 14: -1.9, 15: 2.4},
@@ -29,7 +29,7 @@ def calculate_mod_score(sequence, matrix):
         pos = i + 1
         if base in matrix and pos in matrix[base]:
             score += matrix[base][pos]
-    return round(score, 2)
+    return round(score, 2) # Limit 1: Rounding the math
 
 # --- BIOLOGICAL LOGIC ---
 
@@ -43,7 +43,7 @@ def calculate_metrics(seq):
     length = len(seq)
     gc_cont = ((g + c) / length) * 100 if length > 0 else 0
     tm = 2 * (a + t + u) + 4 * (g + c)
-    return round(gc_cont, 1), tm
+    return round(gc_cont, 2), tm # Updated to 2 decimals
 
 def get_vienna_fold_api(sequence):
     api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}"
@@ -169,22 +169,21 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
             window_struct = dot_bracket[i : i + aso_size]
             gc, tm = calculate_metrics(aso_seq)
             
-            # Conservation check
             hits, fails = [], []
             for entry in db:
                 mismatches = find_best_match(target_site, entry["seq"])
                 if mismatches <= mm_limit: hits.append(f"{entry['title']}({mismatches}mm)")
                 else: fails.append(entry["title"])
             
-            # Modification scoring
             mod_score = calculate_mod_score(aso_seq, current_matrix)
 
             results.append({
                 "ASO_ID": f"{seq_name}_{len(results) + 1}",
                 "Region": f"bp_{i+1}_to_{i+aso_size}",
                 "ASO_Sequence": aso_seq,
-                "GC%": gc, "Tm_C": tm,
-                "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1),
+                "GC%": gc, 
+                "Tm_C": tm,
+                "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 2), # Limit 2: Accessibility to 2 decimals
                 "Mod_Score": mod_score,
                 "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
                 "Matched_In": ", ".join(hits),
@@ -192,7 +191,17 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
             })
         
         df = pd.DataFrame(results)
-        st.dataframe(df.style.background_gradient(subset=['Mod_Score'], cmap='RdYlBu'), use_container_width=True)
+        
+        # Limit 3: Display formatting for the Streamlit table
+        st.dataframe(
+            df.style.background_gradient(subset=['Mod_Score'], cmap='RdYlBu')
+            .format({
+                "GC%": "{:.2f}", 
+                "Accessibility%": "{:.2f}", 
+                "Mod_Score": "{:.2f}"
+            }), 
+            use_container_width=True
+        )
 
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
