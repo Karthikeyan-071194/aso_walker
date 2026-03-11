@@ -170,8 +170,7 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
                 "Motifs": ", ".join(found_motifs) if found_motifs else "None",
                 "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
                 "Matched_In": ", ".join(hits),
-                "Missing_In": ", ".join(fails) if fails else "None",
-                "Color": font_color
+                "Missing_In": ", ".join(fails) if fails else "None"
             })
         
         df = pd.DataFrame(results)
@@ -187,3 +186,4 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
         csv_buffer = io.StringIO()
         df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+
