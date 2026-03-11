@@ -7,11 +7,11 @@ import numpy as np
 # 1. Page Configuration
 st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
 
-# --- MOTIF DATA (From Provided Study) ---
+# --- MOTIF DATA (From Study Data) ---
 LOW_EFFICACY_MOTIFS = {'GGGG': '24.0%', 'AAAA': '29.0%', 'TAAA': '32.0%', 'CTAA': '34.0%', 'CCTA': '35.0%'}
 HIGH_EFFICACY_MOTIFS = {'TTGT': '53.0%', 'GTAT': '54.0%', 'CGTA': '54.0%', 'GTCG': '54.7%', 'GCGT': '57.0%'}
 
-# --- SCORING MATRICES (Experimental Chemistry) ---
+# --- SCORING MATRICES (Extracted from Matrix Images) ---
 MOE_MATRIX = { 
     'A': {1: -3.2, 2: -3.9, 3: -3.6, 4: -2.3, 5: -1.4, 6: -1.4, 7: -3.1, 8: -2.9, 9: -2.2, 10: -2.0, 13: -2.3, 14: -3.0, 15: -2.1, 16: -2.6, 17: -3.8, 18: -4.2, 19: -4.5, 20: -4.1},
     'C': {1: 1.9, 2: 3.1, 3: 4.0, 4: 2.5, 5: 1.9, 13: 2.1, 14: 1.7, 15: 4.2, 16: 4.6, 17: 3.0, 18: 3.8, 19: 4.7},
@@ -26,7 +26,7 @@ CET_MATRIX = {
     'T': {1: 1.7, 2: 4.5, 3: 3.4, 4: 4.3, 5: 8.4, 6: 7.0, 7: 5.0, 8: 4.5, 9: 2.7, 12: 2.0, 13: 2.9, 14: 1.7}
 }
 
-# --- LOGIC FUNCTIONS ---
+# --- HELPER FUNCTIONS ---
 
 def calculate_mod_score(sequence, matrix):
     score = sum(matrix.get(base, {}).get(i+1, 0.0) for i, base in enumerate(sequence))
@@ -39,7 +39,8 @@ def get_reverse_complement(seq):
 def calculate_metrics(seq):
     seq = seq.upper()
     g, c, a, t, u = seq.count('G'), seq.count('C'), seq.count('A'), seq.count('T'), seq.count('U')
-    gc_cont = ((g + c) / len(seq)) * 100 if len(seq) > 0 else 0
+    length = len(seq)
+    gc_cont = ((g + c) / length) * 100 if length > 0 else 0
     tm = 2 * (a + t + u) + 4 * (g + c)
     return round(gc_cont, 2), tm
 
@@ -51,7 +52,7 @@ def get_vienna_fold_api(sequence):
     except: return None
 
 def get_internal_fold(sequence):
-    """Fallback Thermodynamic DP for secondary structure."""
+    """Corrected Thermodynamic DP logic with proper bifurcation indexing."""
     n = len(sequence)
     energies, dp = {'CG': 3.4, 'AU': 0.9, 'GU': 0.1}, np.zeros((n, n))
     for k in range(4, n):
@@ -68,18 +69,14 @@ def get_internal_fold(sequence):
         if i >= j - 3: continue 
         elif dp[i][j] == dp[i+1][j]: stack.append((i+1, j))
         elif dp[i][j] == dp[i][j-1]: stack.append((i, j-1))
+        elif "".join(sorted([sequence[i], sequence[j]])) in energies and dp[i][j] == dp[i+1][j-1] + energies["".join(sorted([sequence[i], sequence[j]]))]:
+            structure[i], structure[j] = "(", ")"
+            stack.append((i+1, j-1))
         else:
-            found = False
-            pair = "".join(sorted([sequence[i], sequence[j]]))
-            if pair in energies and dp[i][j] == dp[i+1][j-1] + energies[pair]:
-                structure[i], structure[j] = "(", ")"
-                stack.append((i+1, j-1))
-                found = True
-            if not found:
-                for t in range(i+1, j):
-                    if dp[i][j] == dp[i][t] + dp[t+1][j]:
-                        stack.append((t+1, j)); stack.append((i, t))
-                        break
+            for t in range(i+1, j):
+                if dp[i][j] == dp[i][t] + dp[t+1][j]:
+                    stack.append((t+1, j)); stack.append((i, t))
+                    break
     return "".join(structure)
 
 def find_best_match(target, database_seq):
@@ -95,20 +92,22 @@ def find_best_match(target, database_seq):
 st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header("Settings")
-    mod_choice = st.selectbox("Chemistry Choice", ["5-10-5 MOE, all PS", "3-10-3 cEt, all PS"])
+    st.header("1. Chemistry & Rules")
+    mod_choice = st.selectbox("Modification Choice", ["5-10-5 MOE, all PS", "3-10-3 cEt, all PS"])
     mm_limit = st.slider("Mismatch Tolerance", 0, 3, 0)
     current_matrix = MOE_MATRIX if "MOE" in mod_choice else CET_MATRIX
+    st.divider()
+    st.info("ASO font color: Red (Reduced Efficiency Motifs) | Green (High Efficiency Motifs)")
 
-raw_seq = st.text_area("Primary Target Sequence", placeholder="Paste sequence here...", height=100)
+raw_seq = st.text_area("Primary Target Sequence", placeholder="Paste main sequence here...", height=100)
 clean_seq = "".join(raw_seq.upper().split())
 
 col1, col2, col3 = st.columns(3)
-with col1: seq_name = st.text_input("Project Name", value="Target_1")
-with col2: aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20 if "MOE" in mod_choice else 16)
-with col3: step_size = st.slider("Step Size", 1, 10, 1)
+with col1: seq_name = st.text_input("Project ID", value="Target_1")
+with col2: aso_size = st.number_input("ASO Length (bp)", min_value=1, value=20 if "MOE" in mod_choice else 16)
+with col3: step_size = st.slider("Walking Stride", 1, 10, 1)
 
-st.subheader("Variant Database")
+st.subheader("2. Variant Database")
 if 'extra_seqs' not in st.session_state: st.session_state.extra_seqs = [{"title": "Variant_1", "seq": ""}]
 def add_box(): st.session_state.extra_seqs.append({"title": f"Variant_{len(st.session_state.extra_seqs)+1}", "seq": ""})
 def remove_box(): 
@@ -122,14 +121,15 @@ for i, box in enumerate(st.session_state.extra_seqs):
 st.button("➕ Add Variant", on_click=add_box)
 if len(st.session_state.extra_seqs) > 1: st.button("➖ Remove Variant", on_click=remove_box)
 
-if st.button("Generate Complete Analysis", type="primary", use_container_width=True):
+if st.button("Run Comprehensive Analysis", type="primary", use_container_width=True):
     if not clean_seq:
-        st.error("Please enter a target sequence.")
+        st.error("Please enter a primary sequence.")
     else:
-        with st.spinner("Processing thermodynamic fold and variant matches..."):
+        with st.spinner("Analyzing variants and calculating secondary structure..."):
             dot_bracket = get_vienna_fold_api(clean_seq) or get_internal_fold(clean_seq)
             db = [{"title": i["title"], "seq": "".join(i["seq"].upper().split())} for i in st.session_state.extra_seqs if i["seq"]]
 
+        # Ruler logic
         r_list = [" "] * len(clean_seq)
         for i in range(len(clean_seq)):
             if (i+1)==1 or (i+1)%10==0:
@@ -157,13 +157,17 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
             
             mod_score = calculate_mod_score(aso_seq, current_matrix)
 
-            # Motif Logic
+            # Motif & Styling Logic
             found_motifs = []
-            font_color = "white" # Default
+            font_color = "#DCDCAA" # Standard terminal font color
             for m, val in LOW_EFFICACY_MOTIFS.items():
-                if m in aso_seq: found_motifs.append(f"{m}({val})"); font_color = "red"
+                if m in aso_seq: 
+                    found_motifs.append(f"{m}({val})")
+                    font_color = "red"
             for m, val in HIGH_EFFICACY_MOTIFS.items():
-                if m in aso_seq: found_motifs.append(f"{m}({val})"); font_color = "green"
+                if m in aso_seq: 
+                    found_motifs.append(f"{m}({val})")
+                    font_color = "green"
 
             results.append({
                 "ASO_ID": f"{seq_name}_{len(results) + 1}",
@@ -181,42 +185,19 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
         
         df = pd.DataFrame(results)
 
-        # UI Styling (Hiding 'Color' metadata)
+        # Style function: Styles 'ASO_Sequence' based on the metadata in 'Color'
         def apply_styles(row):
             return [f'color: {row["Color"]}' if col == 'ASO_Sequence' else '' for col in df.columns]
 
+        # Display Dataframe: Hides 'Color' from the UI but keeps it for styling
         st.dataframe(
             df.style.apply(apply_styles, axis=1)
             .background_gradient(subset=['Mod_Score', 'Accessibility%'], cmap='RdYlBu')
             .format({"GC%": "{:.2f}", "Accessibility%": "{:.2f}", "Mod_Score": "{:.2f}"}), 
-            column_config={"Color": None},
+            column_config={"Color": None}, # Standard method to hide column without breaking styling
             use_container_width=True
         )
 
-        # --- EXCEL EXPORT WITH COLORS ---
-        excel_buffer = io.BytesIO()
-        with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
-            export_df = df.drop(columns=['Color'])
-            export_df.to_excel(writer, index=False, sheet_name='ASO_Analysis')
-            
-            workbook = writer.book
-            worksheet = writer.sheets['ASO_Analysis']
-            
-            # Formatting
-            red_font = workbook.add_format({'font_color': 'red'})
-            green_font = workbook.add_format({'font_color': 'green'})
-            aso_col_idx = export_df.columns.get_loc("ASO_Sequence")
-            
-            for row_num, color_val in enumerate(df['Color']):
-                if color_val == 'red':
-                    worksheet.write(row_num + 1, aso_col_idx, df.iloc[row_num]['ASO_Sequence'], red_font)
-                elif color_val == 'green':
-                    worksheet.write(row_num + 1, aso_col_idx, df.iloc[row_num]['ASO_Sequence'], green_font)
-
-        st.download_button(
-            label="💾 Download Formatted Excel (.xlsx)",
-            data=excel_buffer.getvalue(),
-            file_name=f"{seq_name}_Analysis.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+        csv_buffer = io.StringIO()
+        df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
+        st.download_button("💾 Download Clean CSV Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
