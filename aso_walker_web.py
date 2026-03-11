@@ -7,6 +7,30 @@ import numpy as np
 # 1. Page Configuration
 st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
 
+# --- SCORING MATRICES DATA ---
+# Values extracted from user-provided images image_eef1da.png
+MOE_MATRIX = { # 5-10-5 MOE, all PS
+    'A': {1: -3.2, 2: -3.9, 3: -3.6, 4: -2.3, 5: -1.4, 6: -1.4, 7: -3.1, 8: -2.9, 9: -2.2, 10: -2.0, 13: -2.3, 14: -3.0, 15: -2.1, 16: -2.6, 17: -3.8, 18: -4.2, 19: -4.5, 20: -4.1},
+    'C': {1: 1.9, 2: 3.1, 3: 4.0, 4: 2.5, 5: 1.9, 13: 2.1, 14: 1.7, 15: 4.2, 16: 4.6, 17: 3.0, 18: 3.8, 19: 4.7},
+    'G': {1: 3.1, 2: 1.5, 13: 1.5, 15: -1.9, 17: 1.4, 18: 1.8, 20: -1.6},
+    'T': {1: -1.9, 7: 2.4, 8: 2.4, 9: 2.8, 10: 1.9, 11: 1.5}
+}
+
+CET_MATRIX = { # 3-10-3 cEt, all PS
+    'A': {2: -1.1, 3: 1.1, 4: 2.3, 5: -4.9, 9: 1.1, 13: -2.4, 14: -3.2, 15: -3.1},
+    'C': {1: -3.0, 2: -2.6, 3: -4.1, 4: -7.1, 5: -4.0, 6: -4.7, 7: -3.6, 8: -4.5, 9: -4.7, 10: -2.4, 11: -2.4, 12: -1.5, 13: 1.2, 14: 1.1},
+    'G': {7: -2.9, 8: -2.0, 11: 1.3, 12: 1.1, 14: -1.9, 15: 2.4},
+    'T': {1: 1.7, 2: 4.5, 3: 3.4, 4: 4.3, 5: 8.4, 6: 7.0, 7: 5.0, 8: 4.5, 9: 2.7, 12: 2.0, 13: 2.9, 14: 1.7}
+}
+
+def calculate_mod_score(sequence, matrix):
+    score = 0.0
+    for i, base in enumerate(sequence):
+        pos = i + 1
+        if base in matrix and pos in matrix[base]:
+            score += matrix[base][pos]
+    return round(score, 2)
+
 # --- BIOLOGICAL LOGIC ---
 
 def get_reverse_complement(seq):
@@ -30,97 +54,54 @@ def get_vienna_fold_api(sequence):
     except:
         return None
 
-def get_internal_fold(sequence):
-    n = len(sequence)
-    energies = {'CG': 3.4, 'AU': 0.9, 'GU': 0.1}
-    dp = np.zeros((n, n))
-    for k in range(4, n):
-        for i in range(n - k):
-            j = i + k
-            res = [dp[i+1][j], dp[i][j-1]]
-            pair = "".join(sorted([sequence[i], sequence[j]]))
-            if pair in energies: res.append(dp[i+1][j-1] + energies[pair])
-            for t in range(i + 1, j): res.append(dp[i][t] + dp[t+1][j])
-            dp[i][j] = max(res)
-    structure = ["."] * n
-    stack = [(0, n - 1)]
-    while stack:
-        i, j = stack.pop()
-        if i >= j - 3: continue 
-        elif dp[i][j] == dp[i+1][j]: stack.append((i+1, j))
-        elif dp[i][j] == dp[i][j-1]: stack.append((i, j-1))
-        else:
-            pair = "".join(sorted([sequence[i], sequence[j]]))
-            if pair in energies and dp[i][j] == dp[i+1][j-1] + energies[pair]:
-                structure[i], structure[j] = "(", ")"
-                stack.append((i+1, j-1))
-            else:
-                for k in range(i+1, j):
-                    if dp[i][j] == dp[i][k] + dp[k+1][j]:
-                        stack.append((k+1, j)); stack.append((i, k))
-                        break
-    return "".join(structure)
-
-def find_best_match(target, database_seq):
-    """Finds best match in a sequence and returns the number of mismatches."""
-    t_len = len(target)
-    d_len = len(database_seq)
-    min_mismatches = t_len
-    
-    for i in range(d_len - t_len + 1):
-        window = database_seq[i : i + t_len]
-        mismatches = sum(1 for a, b in zip(target, window) if a != b)
-        if mismatches < min_mismatches:
-            min_mismatches = mismatches
-        if min_mismatches == 0: break
-    return min_mismatches
-
 # --- UI SECTION ---
 
 st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: gray;'>Multi-Sequence Analysis with Mismatch Tolerance</p>", unsafe_allow_html=True)
 
-# 1. Primary Target Input
+with st.sidebar:
+    st.header("Chemistry Settings")
+    mod_choice = st.selectbox(
+        "Select ASO Modification",
+        ["5-10-5 MOE, all PS", "3-10-3 cEt, all PS"]
+    )
+    current_matrix = MOE_MATRIX if "MOE" in mod_choice else CET_MATRIX
+    st.info(f"Scoring applied based on the {mod_choice} efficacy matrix.")
+    st.divider()
+    mm_limit = st.slider("Mismatch Tolerance", 0, 3, 0)
+    st.markdown("**ASO Walker Pro: Predictive Efficacy**")
+
+# Inputs
 st.subheader("1. Primary Target Sequence")
 c_m1, c_m2 = st.columns([1, 3])
 with c_m1:
-    main_name = st.text_input("Main Sequence Title", value="WildType_Target")
+    main_name = st.text_input("Project Name", value="WT_Target")
 with c_m2:
-    main_raw = st.text_area("Primary Sequence (Walk is performed here)", placeholder="ATCG...", height=100)
+    main_raw = st.text_area("Primary Sequence", placeholder="ATCG...", height=100)
 main_clean = "".join(main_raw.upper().split())
 
-# 2. Conservation Database
+# Dynamic Variants
 st.subheader("2. Variant Database")
 if 'extra_seqs' not in st.session_state:
     st.session_state.extra_seqs = [{"title": "Variant_1", "seq": ""}]
 
 def add_box(): st.session_state.extra_seqs.append({"title": f"Variant_{len(st.session_state.extra_seqs)+1}", "seq": ""})
-def remove_box(): 
-    if len(st.session_state.extra_seqs) > 1: st.session_state.extra_seqs.pop()
-
 for i, box in enumerate(st.session_state.extra_seqs):
     c1, c2 = st.columns([1, 3])
     with c1: st.session_state.extra_seqs[i]["title"] = st.text_input(f"Title {i+1}", value=box["title"], key=f"t_{i}")
     with c2: st.session_state.extra_seqs[i]["seq"] = st.text_area(f"Seq {i+1}", value=box["seq"], key=f"s_{i}", height=68)
-
 st.button("➕ Add Variant", on_click=add_box)
-if len(st.session_state.extra_seqs) > 1: st.button("➖ Remove Variant", on_click=remove_box)
 
-# 3. Settings
 st.divider()
-c_s1, c_s2, c_s3, c_s4 = st.columns(4)
-with c_s1: aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20)
+c_s1, c_s2 = st.columns(2)
+with c_s1: aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20 if "MOE" in mod_choice else 16)
 with c_s2: step_size = st.slider("Step Size", 1, 10, 1)
-with c_s3: mm_limit = st.slider("Mismatch Tolerance", 0, 3, 0)
-with c_s4: st.caption("0 = Perfect match required. 1-3 = Allows near-matches in variants.")
 
-# 4. Execution
-if st.button("Run Advanced Conservation Analysis", type="primary", use_container_width=True):
+if st.button("Generate Predictive Analysis", type="primary", use_container_width=True):
     if not main_clean:
-        st.error("Missing Primary Target Sequence.")
+        st.error("Missing Target Sequence.")
     else:
-        with st.spinner("Analyzing structures and variant matches..."):
-            dot_bracket = get_vienna_fold_api(main_clean) or get_internal_fold(main_clean)
+        with st.spinner("Analyzing structure and predicting efficacy..."):
+            dot_bracket = get_vienna_fold_api(main_clean) or ("." * len(main_clean))
             db = [{"title": i["title"], "seq": "".join(i["seq"].upper().split())} for i in st.session_state.extra_seqs if i["seq"]]
 
             results = []
@@ -130,32 +111,22 @@ if st.button("Run Advanced Conservation Analysis", type="primary", use_container
                 window_struct = dot_bracket[i : i + aso_size]
                 gc, tm = calculate_metrics(aso_seq)
                 
-                # Check variants
-                hits, fails = [], []
-                for entry in db:
-                    mismatches = find_best_match(target_site, entry["seq"])
-                    if mismatches <= mm_limit:
-                        hits.append(f"{entry['title']}({mismatches}mm)")
-                    else:
-                        fails.append(entry["title"])
-                
-                status = "CONSERVED" if not fails else f"VARIABLE ({len(hits)}/{len(db)})"
+                # Modification Score from Matrix
+                mod_score = calculate_mod_score(aso_seq, current_matrix)
                 
                 results.append({
                     "ASO_ID": f"{main_name}_{len(results) + 1}",
-                    "Region": f"Bases {i+1} to {i+aso_size}",
+                    "Region": f"bp_{i+1}_to_{i+aso_size}",
                     "ASO_Sequence": aso_seq,
                     "GC%": gc, "Tm_C": tm,
                     "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1),
-                    "Status": status,
-                    "Matched_In": ", ".join(hits),
-                    "Missing_In": ", ".join(fails) if fails else "None"
+                    "Mod_Efficacy_Score": mod_score,
+                    "Chemistry": mod_choice
                 })
 
             df = pd.DataFrame(results)
 
-            # High-Contrast Alignment Map
-            st.subheader("Target Structure Alignment")
+            # Alignment Map
             r_list = [" "] * len(main_clean)
             for j in range(len(main_clean)):
                 if (j+1) == 1 or (j+1) % 10 == 0:
@@ -170,17 +141,14 @@ if st.button("Run Advanced Conservation Analysis", type="primary", use_container
 <span style="color: #4EC9B0;">STR:</span> {dot_bracket}
                 </div>""", unsafe_allow_html=True)
 
-            st.subheader("Analysis Results")
-            st.dataframe(df.style.background_gradient(subset=['Accessibility%'], cmap='Greens'), use_container_width=True)
+            st.subheader("Predictive Results")
+            # Color code score: Blue for positive (better), Red for negative
+            st.dataframe(df.style.background_gradient(subset=['Mod_Efficacy_Score'], cmap='RdYlBu'), use_container_width=True)
 
             csv_buf = io.StringIO()
             df.to_csv(csv_buf, index=False)
-            st.download_button("💾 Download Results", data=csv_buf.getvalue(), file_name=f"{main_name}_Analysis.csv", use_container_width=True)
+            st.download_button("💾 Download Predictive CSV", data=csv_buf.getvalue(), file_name=f"{main_name}_Predictive_Analysis.csv", use_container_width=True)
 
-with st.sidebar:
-    st.info(f"**Tolerance:** Allows up to {mm_limit} mismatches in variants.")
-    st.divider()
-    st.markdown("**ASO Walker Pro**")
 
 
 
