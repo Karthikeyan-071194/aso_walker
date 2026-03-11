@@ -167,7 +167,7 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
 
             results.append({
                 "ASO_ID": f"{seq_name}_{len(results) + 1}",
-                "Region": f"Bases {i+1} to {i+aso_size}",
+                "Region": f"bp_{i+1}_to_{i+aso_size}",
                 "ASO_Sequence": aso_seq,
                 "GC%": gc, "Tm_C": tm,
                 "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 2),
@@ -175,7 +175,8 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
                 "Motifs": ", ".join(found_motifs) if found_motifs else "None",
                 "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
                 "Matched_In": ", ".join(hits),
-                "Missing_In": ", ".join(fails) if fails else "None"
+                "Missing_In": ", ".join(fails) if fails else "None",
+                "Color": font_color
             })
         
         df = pd.DataFrame(results)
