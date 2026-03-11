@@ -178,7 +178,7 @@ if st.button("Run Comprehensive Analysis", type="primary", use_container_width=T
                 "Mod_Score": mod_score,
                 "Motifs": ", ".join(found_motifs) if found_motifs else "None",
                 "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
-                "Matched_In": ", ".join(hits),
+                "Matched_In": ", ".join(hits) if fails else "None",
                 "Missing_In": ", ".join(fails) if fails else "None",
                 "Color": font_color
             })
@@ -201,3 +201,4 @@ if st.button("Run Comprehensive Analysis", type="primary", use_container_width=T
         csv_buffer = io.StringIO()
         df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Clean CSV Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+
