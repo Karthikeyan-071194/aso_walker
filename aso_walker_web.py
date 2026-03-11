@@ -5,10 +5,9 @@ import requests
 import numpy as np
 
 # 1. Page Configuration
-st.set_page_config(page_title="ASO Walker", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
 
 # --- MOTIF DATA ---
-# Data from Figure 2c and study text provided by user
 LOW_EFFICACY_MOTIFS = {'GGGG': '24.0%', 'AAAA': '29.0%', 'TAAA': '32.0%', 'CTAA': '34.0%', 'CCTA': '35.0%'}
 HIGH_EFFICACY_MOTIFS = {'TTGT': '53.0%', 'GTAT': '54.0%', 'CGTA': '54.0%', 'GTCG': '54.7%', 'GCGT': '57.0%'}
 
@@ -32,7 +31,6 @@ def calculate_mod_score(sequence, matrix):
     return round(score, 2)
 
 # --- BIOLOGICAL LOGIC ---
-
 def get_reverse_complement(seq):
     trans = str.maketrans('ATCGUatcgu', 'TAGCAtagca')
     return seq.translate(trans)[::-1]
@@ -76,7 +74,7 @@ def get_internal_fold(sequence):
                 stack.append((i+1, j-1))
             else:
                 for k in range(i+1, j):
-                    if dp[i][j] == dp[i][k] + dp[k+1][j]:
+                    if dp[i][j] == dp[i][k] + dp[t+1][j]:
                         stack.append((k+1, j)); stack.append((i, k))
                         break
     return "".join(structure)
@@ -90,7 +88,7 @@ def find_best_match(target, database_seq):
     return min_mm
 
 # --- UI SECTION ---
-st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("Settings")
@@ -98,13 +96,13 @@ with st.sidebar:
     mm_limit = st.slider("Mismatch Tolerance", 0, 3, 0)
     current_matrix = MOE_MATRIX if "MOE" in mod_choice else CET_MATRIX
 
-raw_seq = st.text_area("Target Sequence", placeholder="Paste sequence here...", height=100)
+raw_seq = st.text_area("Primary Target Sequence", placeholder="Paste sequence here...", height=100)
 clean_seq = "".join(raw_seq.upper().split())
 
 col1, col2, col3 = st.columns(3)
-with col1: seq_name = st.text_input("Sequence Name", value="Target_1")
+with col1: seq_name = st.text_input("Project Title", value="Target_1")
 with col2: aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20 if "MOE" in mod_choice else 16)
-with col3: step_size = st.slider("Step Size", 1, 10, 1)
+with col3: step_size = st.slider("Stride (Step)", 1, 10, 1)
 
 st.subheader("Variant Database")
 if 'extra_seqs' not in st.session_state: st.session_state.extra_seqs = [{"title": "Variant_1", "seq": ""}]
@@ -120,10 +118,10 @@ for i, box in enumerate(st.session_state.extra_seqs):
 st.button("➕ Add Variant", on_click=add_box)
 if len(st.session_state.extra_seqs) > 1: st.button("➖ Remove Variant", on_click=remove_box)
 
-if st.button("Generate Analysis", type="primary", use_container_width=True):
-    if not clean_seq: st.error("Please enter a sequence.")
+if st.button("Generate Complete Analysis", type="primary", use_container_width=True):
+    if not clean_seq: st.error("Please enter a target sequence.")
     else:
-        with st.spinner("Processing..."):
+        with st.spinner("Analyzing variants and folding..."):
             dot_bracket = get_vienna_fold_api(clean_seq) or get_internal_fold(clean_seq)
             db = [{"title": i["title"], "seq": "".join(i["seq"].upper().split())} for i in st.session_state.extra_seqs if i["seq"]]
 
@@ -146,6 +144,7 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
             window_struct = dot_bracket[i : i + aso_size]
             gc, tm = calculate_metrics(aso_seq)
             
+            # Restoration of Conservation Search
             hits, fails = [], []
             for entry in db:
                 mm = find_best_match(target_site, entry["seq"])
@@ -154,7 +153,7 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
             
             mod_score = calculate_mod_score(aso_seq, current_matrix)
 
-            # --- MOTIF LOGIC ---
+            # Motif Logic
             found_motifs = []
             font_color = "#DCDCAA" # Default
             for m, val in LOW_EFFICACY_MOTIFS.items():
@@ -168,19 +167,19 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
 
             results.append({
                 "ASO_ID": f"{seq_name}_{len(results) + 1}",
-                "Region": f"bp_{i+1}_to_{i+aso_size}",
+                "Region": f"Bases {i+1} to {i+aso_size}",
                 "ASO_Sequence": aso_seq,
                 "GC%": gc, "Tm_C": tm,
                 "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 2),
                 "Mod_Score": mod_score,
                 "Motifs": ", ".join(found_motifs) if found_motifs else "None",
-                "Color": font_color,
-                "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})"
+                "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
+                "Matched_In": ", ".join(hits),
+                "Missing_In": ", ".join(fails) if fails else "None"
             })
         
         df = pd.DataFrame(results)
 
-        # --- APPLY FONT COLORING ---
         def color_aso(row):
             return [f'color: {row["Color"]}' if col == 'ASO_Sequence' else '' for col in df.columns]
 
@@ -193,4 +192,4 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
 
         csv_buffer = io.StringIO()
         df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
-        st.download_button("💾 Download Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+        st.download_button("💾 Download Restored CSV", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
