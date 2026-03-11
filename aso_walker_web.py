@@ -5,7 +5,7 @@ import requests
 import numpy as np
 
 # 1. Page Configuration
-st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
+st.set_page_config(page_title="ASO Walker", page_icon="🧬", layout="wide")
 
 # --- SCORING MATRICES DATA ---
 # Values extracted from user-provided images image_eef1da.png
@@ -54,101 +54,146 @@ def get_vienna_fold_api(sequence):
     except:
         return None
 
+def get_internal_fold(sequence):
+    n = len(sequence)
+    energies = {'CG': 3.4, 'AU': 0.9, 'GU': 0.1}
+    dp = np.zeros((n, n))
+    for k in range(4, n):
+        for i in range(n - k):
+            j = i + k
+            res = [dp[i+1][j], dp[i][j-1]]
+            pair = "".join(sorted([sequence[i], sequence[j]]))
+            if pair in energies: res.append(dp[i+1][j-1] + energies[pair])
+            for t in range(i + 1, j): res.append(dp[i][t] + dp[t+1][j])
+            dp[i][j] = max(res)
+    structure = ["."] * n
+    stack = [(0, n - 1)]
+    while stack:
+        i, j = stack.pop()
+        if i >= j - 3: continue 
+        elif dp[i][j] == dp[i+1][j]: stack.append((i+1, j))
+        elif dp[i][j] == dp[i][j-1]: stack.append((i, j-1))
+        else:
+            pair = "".join(sorted([sequence[i], sequence[j]]))
+            if pair in energies and dp[i][j] == dp[i+1][j-1] + energies[pair]:
+                structure[i], structure[j] = "(", ")"
+                stack.append((i+1, j-1))
+            else:
+                for k in range(i+1, j):
+                    if dp[i][j] == dp[i][k] + dp[k+1][j]:
+                        stack.append((k+1, j)); stack.append((i, k))
+                        break
+    return "".join(structure)
+
+def find_best_match(target, database_seq):
+    t_len = len(target)
+    d_len = len(database_seq)
+    min_mismatches = t_len
+    for i in range(d_len - t_len + 1):
+        window = database_seq[i : i + t_len]
+        mismatches = sum(1 for a, b in zip(target, window) if a != b)
+        if mismatches < min_mismatches:
+            min_mismatches = mismatches
+        if min_mismatches == 0: break
+    return min_mismatches
+
 # --- UI SECTION ---
 
-st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker Pro</h1>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align: center;'>🧬 ASO Walker</h1>", unsafe_allow_html=True)
 
 with st.sidebar:
-    st.header("Chemistry Settings")
-    mod_choice = st.selectbox(
-        "Select ASO Modification",
-        ["5-10-5 MOE, all PS", "3-10-3 cEt, all PS"]
-    )
-    current_matrix = MOE_MATRIX if "MOE" in mod_choice else CET_MATRIX
-    st.info(f"Scoring applied based on the {mod_choice} efficacy matrix.")
-    st.divider()
+    st.header("Settings")
+    mod_choice = st.selectbox("Chemistry Choice", ["5-10-5 MOE, all PS", "3-10-3 cEt, all PS"])
     mm_limit = st.slider("Mismatch Tolerance", 0, 3, 0)
-    st.markdown("**ASO Walker Pro: Predictive Efficacy**")
+    current_matrix = MOE_MATRIX if "MOE" in mod_choice else CET_MATRIX
 
-# Inputs
-st.subheader("1. Primary Target Sequence")
-c_m1, c_m2 = st.columns([1, 3])
-with c_m1:
-    main_name = st.text_input("Project Name", value="WT_Target")
-with c_m2:
-    main_raw = st.text_area("Primary Sequence", placeholder="ATCG...", height=100)
-main_clean = "".join(main_raw.upper().split())
+raw_seq = st.text_area("Target Sequence", placeholder="Paste sequence here...", height=100)
+clean_seq = "".join(raw_seq.upper().split())
 
-# Dynamic Variants
-st.subheader("2. Variant Database")
+col1, col2, col3 = st.columns(3)
+with col1:
+    seq_name = st.text_input("Sequence Name", value="Target_1")
+with col2:
+    aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20 if "MOE" in mod_choice else 16)
+with col3:
+    step_size = st.slider("Step Size", 1, 10, 1)
+
+st.subheader("Variant Database")
 if 'extra_seqs' not in st.session_state:
     st.session_state.extra_seqs = [{"title": "Variant_1", "seq": ""}]
 
 def add_box(): st.session_state.extra_seqs.append({"title": f"Variant_{len(st.session_state.extra_seqs)+1}", "seq": ""})
+def remove_box(): 
+    if len(st.session_state.extra_seqs) > 1: st.session_state.extra_seqs.pop()
+
 for i, box in enumerate(st.session_state.extra_seqs):
     c1, c2 = st.columns([1, 3])
     with c1: st.session_state.extra_seqs[i]["title"] = st.text_input(f"Title {i+1}", value=box["title"], key=f"t_{i}")
     with c2: st.session_state.extra_seqs[i]["seq"] = st.text_area(f"Seq {i+1}", value=box["seq"], key=f"s_{i}", height=68)
+
 st.button("➕ Add Variant", on_click=add_box)
+if len(st.session_state.extra_seqs) > 1: st.button("➖ Remove Variant", on_click=remove_box)
 
-st.divider()
-c_s1, c_s2 = st.columns(2)
-with c_s1: aso_size = st.number_input("ASO Size (bp)", min_value=1, value=20 if "MOE" in mod_choice else 16)
-with c_s2: step_size = st.slider("Step Size", 1, 10, 1)
-
-if st.button("Generate Predictive Analysis", type="primary", use_container_width=True):
-    if not main_clean:
-        st.error("Missing Target Sequence.")
+if st.button("Generate Analysis", type="primary", use_container_width=True):
+    if not clean_seq:
+        st.error("Please enter a sequence.")
     else:
-        with st.spinner("Analyzing structure and predicting efficacy..."):
-            dot_bracket = get_vienna_fold_api(main_clean) or ("." * len(main_clean))
+        with st.spinner("Processing..."):
+            dot_bracket = get_vienna_fold_api(clean_seq) or get_internal_fold(clean_seq)
             db = [{"title": i["title"], "seq": "".join(i["seq"].upper().split())} for i in st.session_state.extra_seqs if i["seq"]]
 
-            results = []
-            for i in range(0, len(main_clean) - aso_size + 1, step_size):
-                target_site = main_clean[i : i + aso_size]
-                aso_seq = get_reverse_complement(target_site)
-                window_struct = dot_bracket[i : i + aso_size]
-                gc, tm = calculate_metrics(aso_seq)
-                
-                # Modification Score from Matrix
-                mod_score = calculate_mod_score(aso_seq, current_matrix)
-                
-                results.append({
-                    "ASO_ID": f"{main_name}_{len(results) + 1}",
-                    "Region": f"bp_{i+1}_to_{i+aso_size}",
-                    "ASO_Sequence": aso_seq,
-                    "GC%": gc, "Tm_C": tm,
-                    "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1),
-                    "Mod_Efficacy_Score": mod_score,
-                    "Chemistry": mod_choice
-                })
+        ruler_list = [" "] * len(clean_seq)
+        for i in range(len(clean_seq)):
+            pos = i + 1
+            if pos == 1 or pos % 10 == 0:
+                for j, digit in enumerate(str(pos)):
+                    if i + j < len(clean_seq): ruler_list[i + j] = digit
+        ruler = "".join(ruler_list)
 
-            df = pd.DataFrame(results)
+        st.subheader("Thermodynamic Alignment Map")
+        st.markdown(
+            f"""
+            <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
+                        background-color: #1E1E1E; padding: 25px; border-radius: 10px; line-height: 2.0; border: 1px solid #333;">
+<span style="color: #FF5F5F; font-weight: bold;">NUM:</span> <span style="color: #FFFFFF;">{ruler}</span>
+<span style="color: #569CD6; font-weight: bold;">SEQ:</span> <span style="color: #DCDCAA; font-weight: bold;">{clean_seq}</span>
+<span style="color: #4EC9B0; font-weight: bold;">STR:</span> <span style="color: #CE9178;">{dot_bracket}</span>
+            </div>
+            """, unsafe_allow_html=True
+        )
 
-            # Alignment Map
-            r_list = [" "] * len(main_clean)
-            for j in range(len(main_clean)):
-                if (j+1) == 1 or (j+1) % 10 == 0:
-                    for k, d in enumerate(str(j+1)):
-                        if j+k < len(main_clean): r_list[j+k] = d
+        results = []
+        for i in range(0, len(clean_seq) - aso_size + 1, step_size):
+            target_site = clean_seq[i : i + aso_size]
+            aso_seq = get_reverse_complement(target_site)
+            window_struct = dot_bracket[i : i + aso_size]
+            gc, tm = calculate_metrics(aso_seq)
             
-            st.markdown(f"""
-                <div style="overflow-x: auto; white-space: pre; font-family: 'Courier New', monospace; 
-                            background-color: #1E1E1E; padding: 25px; border-radius: 10px; line-height: 2.0; color: white;">
-<span style="color: #FF5F5F;">NUM:</span> {"".join(r_list)}
-<span style="color: #569CD6;">SEQ:</span> {main_clean}
-<span style="color: #4EC9B0;">STR:</span> {dot_bracket}
-                </div>""", unsafe_allow_html=True)
+            # Conservation check
+            hits, fails = [], []
+            for entry in db:
+                mismatches = find_best_match(target_site, entry["seq"])
+                if mismatches <= mm_limit: hits.append(f"{entry['title']}({mismatches}mm)")
+                else: fails.append(entry["title"])
+            
+            # Modification scoring
+            mod_score = calculate_mod_score(aso_seq, current_matrix)
 
-            st.subheader("Predictive Results")
-            # Color code score: Blue for positive (better), Red for negative
-            st.dataframe(df.style.background_gradient(subset=['Mod_Efficacy_Score'], cmap='RdYlBu'), use_container_width=True)
+            results.append({
+                "ASO_ID": f"{seq_name}_{len(results) + 1}",
+                "Region": f"bp_{i+1}_to_{i+aso_size}",
+                "ASO_Sequence": aso_seq,
+                "GC%": gc, "Tm_C": tm,
+                "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 1),
+                "Mod_Score": mod_score,
+                "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
+                "Matched_In": ", ".join(hits),
+                "Missing_In": ", ".join(fails) if fails else "None"
+            })
+        
+        df = pd.DataFrame(results)
+        st.dataframe(df.style.background_gradient(subset=['Mod_Score'], cmap='RdYlBu'), use_container_width=True)
 
-            csv_buf = io.StringIO()
-            df.to_csv(csv_buf, index=False)
-            st.download_button("💾 Download Predictive CSV", data=csv_buf.getvalue(), file_name=f"{main_name}_Predictive_Analysis.csv", use_container_width=True)
-
-
-
-
+        csv_buffer = io.StringIO()
+        df.to_csv(csv_buffer, index=False)
+        st.download_button("💾 Download Results
