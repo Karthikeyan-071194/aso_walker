@@ -8,8 +8,8 @@ import numpy as np
 st.set_page_config(page_title="ASO Walker Pro", page_icon="🧬", layout="wide")
 
 # --- MOTIF DATA (From Study Data) ---
-LOW_EFFICACY_MOTIFS = {'GGGG': '24.0%', 'AAAA': '29.0%', 'TAAA': '32.0%', 'CTAA': '34.0%', 'CCTA': '35.0%'}
-HIGH_EFFICACY_MOTIFS = {'TTGT': '53.0%', 'GTAT': '54.0%', 'CGTA': '54.0%', 'GTCG': '54.7%', 'GCGT': '57.0%'}
+LOW_EFFICACY_MOTIFS = {'GGGG': 'Reduced efficiency', 'AAAA': 'Reduced efficiency', 'TAAA': 'Reduced efficiency', 'CTAA': 'Reduced efficiency', 'CCTA': 'Reduced efficiency'}
+HIGH_EFFICACY_MOTIFS = {'TTGT': 'Increased efficiency', 'GTAT': 'Increased efficiency', 'CGTA': 'Increased efficiency', 'GTCG': 'Increased efficiency', 'GCGT': 'Increased efficiency'}
 
 # --- SCORING MATRICES (Extracted from Matrix Images) ---
 MOE_MATRIX = { 
@@ -201,3 +201,4 @@ if st.button("Run Comprehensive Analysis", type="primary", use_container_width=T
         csv_buffer = io.StringIO()
         df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Clean CSV Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+
