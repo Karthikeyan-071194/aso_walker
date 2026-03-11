@@ -41,7 +41,7 @@ def calculate_metrics(seq):
     length = len(seq)
     gc_cont = ((g + c) / length) * 100 if length > 0 else 0
     tm = 2 * (a + t + u) + 4 * (g + c)
-    return round(gc_cont, 0), tm
+    return round(gc_cont, 2), tm
 
 def get_vienna_fold_api(sequence):
     api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}"
@@ -165,12 +165,13 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
                 "Region": f"bp_{i+1}_to_{i+aso_size}",
                 "ASO_Sequence": aso_seq,
                 "GC%": gc, "Tm_C": tm,
-                "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 0),
+                "Accessibility%": round((window_struct.count(".") / aso_size) * 100, 2),
                 "Mod_Score": calculate_mod_score(aso_seq, current_matrix),
                 "Motifs": ", ".join(found_motifs) if found_motifs else "None",
                 "Status": "CONSERVED" if not fails else f"VAR ({len(hits)}/{len(db)})",
                 "Matched_In": ", ".join(hits),
-                "Missing_In": ", ".join(fails) if fails else "None"
+                "Missing_In": ", ".join(fails) if fails else "None",
+                "Color": font_color
             })
         
         df = pd.DataFrame(results)
@@ -186,4 +187,3 @@ if st.button("Generate Complete Analysis", type="primary", use_container_width=T
         csv_buffer = io.StringIO()
         df.drop(columns=['Color']).to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
-
