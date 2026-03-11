@@ -43,7 +43,7 @@ def calculate_metrics(seq):
     length = len(seq)
     gc_cont = ((g + c) / length) * 100 if length > 0 else 0
     tm = 2 * (a + t + u) + 4 * (g + c)
-    return round(gc_cont, 2), tm # Updated to 2 decimals
+    return round(gc_cont, 0), tm # Updated to 2 decimals
 
 def get_vienna_fold_api(sequence):
     api_url = f"https://api.vienna-rna.org/rnafold?seq={sequence}"
@@ -206,3 +206,4 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
         st.download_button("💾 Download Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
+
