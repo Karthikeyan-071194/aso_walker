@@ -196,4 +196,4 @@ if st.button("Generate Analysis", type="primary", use_container_width=True):
 
         csv_buffer = io.StringIO()
         df.to_csv(csv_buffer, index=False)
-        st.download_button("💾 Download Results
+        st.download_button("💾 Download Results", data=csv_buffer.getvalue(), file_name=f"{seq_name}_Analysis.csv", use_container_width=True)
